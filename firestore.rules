@@ -1,0 +1,37 @@
+// Firestore rules for the Skin Care Routine app.
+//
+// This app shares the "bowl-donor-chart" Firebase project with the Hollywood Bowl donor chart.
+// A Firebase project has ONE rules file, so these rules must be merged into that project's
+// firestore.rules (the donor chart repo, jskagan/bowl-donor-chart) and deployed with
+//   firebase deploy --only firestore:rules
+// Everything here is scoped to collections that start with "skincare_", so the donor chart's
+// own rules (nights, meta) are untouched. If the app moves to its own project later, this file
+// can be deployed there as-is.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Skin Care Routine (paste this block into the donor chart's rules) ----
+    function scEmail() {
+      return request.auth != null && request.auth.token.email != null
+        ? request.auth.token.email.lower() : "";
+    }
+    function scOwner() { return scEmail() == "jskagan@gmail.com"; }
+    function scMember() {
+      return scOwner() ||
+        (scEmail() != "" &&
+         exists(/databases/$(database)/documents/skincare_config/members) &&
+         scEmail() in get(/databases/$(database)/documents/skincare_config/members).data.emails);
+    }
+    // Member list: everyone signed in may read it (the app checks it at sign-in); only the owner edits it.
+    match /skincare_config/{doc} {
+      allow read: if request.auth != null;
+      allow write: if scOwner();
+    }
+    // Daily check-offs, bottle history and packing lists: members only.
+    match /skincare_checks/{doc}  { allow read, write: if scMember(); }
+    match /skincare_bottles/{doc} { allow read, write: if scMember(); }
+    match /skincare_trips/{doc}   { allow read, write: if scMember(); }
+    // ---- end Skin Care Routine ----
+  }
+}

@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skin Care Routine</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="img/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Skin Care">
+<meta name="theme-color" content="#EFF3F1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html { color-scheme: light; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+/* Layout: one narrow column app. Header with person switch, tab bar, then Today / Routine / Masks / Product usage. */
+:root {
+  --bg: #EFF3F1;
+  --surface: #FFFFFF;
+  --fg: #13201B;
+  --muted: #5B6B65;
+  --line: #D5DEDA;
+  --accent: #1D6B58;
+  --accent-fg: #FFFFFF;
+  --am: #A85F00;
+  --am-bg: #FBEBCF;
+  --pm: #3C3F94;
+  --pm-bg: #E3E4F7;
+  --mask: #8A3A7A;
+  --mask-bg: #F3E2EF;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --scrim: rgba(8, 14, 12, 0.9);
+  --scrim-fg: #F2F7F4;
+  --ok-fg: #1E7A3C; --ok-bg: #D9F2E0;
+  --bad-fg: #B3261E; --bad-bg: #F9DEDC;
+  --na: #E6EAE8; --today-bg: #F4F8F6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1512; --surface: #16201B; --fg: #E7EFEB; --muted: #96A8A0; --line: #26342E;
+    --accent: #5CC3A5; --accent-fg: #0E1512;
+    --am: #F0B455; --am-bg: #3A2B10; --pm: #A9ADF5; --pm-bg: #23254A;
+    --mask: #E49BD0; --mask-bg: #3A1F35;
+    --ok-fg: #7ADB9A; --ok-bg: #163A24;
+    --bad-fg: #F4A09A; --bad-bg: #4A1F1C;
+    --na: #202A25; --today-bg: #1B2520;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1512; --surface: #16201B; --fg: #E7EFEB; --muted: #96A8A0; --line: #26342E;
+  --accent: #5CC3A5; --accent-fg: #0E1512;
+  --am: #F0B455; --am-bg: #3A2B10; --pm: #A9ADF5; --pm-bg: #23254A;
+  --mask: #E49BD0; --mask-bg: #3A1F35;
+  --ok-fg: #7ADB9A; --ok-bg: #163A24;
+  --bad-fg: #F4A09A; --bad-bg: #4A1F1C;
+  --na: #202A25; --today-bg: #1B2520;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; flex-direction: column; gap: 14px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mark { width: 3rem; height: 3rem; border-radius: 50%; object-fit: cover; border: 1px solid var(--line); flex: none; }
+.who { display: flex; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; align-self: flex-start; }
+.who button { border: 0; background: transparent; padding: 7px 16px; border-radius: 999px; font-weight: 600; color: var(--muted); }
+.who button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs button { flex: none; white-space: nowrap; border: 0; background: none; padding: 8px 0 10px; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 2rem; line-height: 1.05; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; margin: 0; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.label { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
+
+.session { display: flex; gap: 8px; }
+.session button { flex: 1; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.session button[data-s="am"][aria-pressed="true"] { background: var(--am-bg); border-color: var(--am); color: var(--am); }
+.session button[data-s="pm"][aria-pressed="true"] { background: var(--pm-bg); border-color: var(--pm); color: var(--pm); }
+.session svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.banner { background: var(--mask-bg); border: 1px solid var(--mask); border-radius: 14px; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.banner .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.banner .label { color: var(--mask); }
+.banner strong { font-family: var(--font-display); font-size: 1.2rem; }
+.banner.quiet { background: var(--surface); border-color: var(--line); }
+.banner.quiet .label { color: var(--muted); }
+.notice { background: var(--surface); border: 1px dashed var(--muted); border-radius: 12px; padding: 10px 14px; font-size: 0.875rem; color: var(--muted); }
+
+.progress { display: flex; align-items: center; gap: 12px; }
+.bar { flex: 1; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .25s ease; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+
+ol.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pc { display: flex; flex-direction: column; gap: 6px; }
+.step { flex: 1; min-width: 0; display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) 1.75rem; align-items: center; gap: 10px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.step .n { font-family: var(--font-mono); font-weight: 500; font-size: 1.25rem; color: var(--muted); }
+.step .name { font-weight: 600; display: block; }
+.step .brand { font-size: 0.8125rem; color: var(--muted); display: block; }
+.step .box { width: 1.5rem; height: 1.5rem; border: 2px solid var(--line); border-radius: 8px; display: grid; place-items: center; }
+.step .box svg { width: 14px; height: 14px; stroke: var(--accent-fg); stroke-width: 3; fill: none; opacity: 0; }
+.step[aria-pressed="true"] { background: transparent; }
+.step[aria-pressed="true"] .name { text-decoration: line-through; color: var(--muted); }
+.step[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); }
+.step[aria-pressed="true"] .box svg { opacity: 1; }
+.step[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+div.step { cursor: default; }
+.note { font-size: 0.875rem; color: var(--muted); margin: 0; }
+
+.meta { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; padding-left: calc(3.5rem + 8px); font-size: 0.8125rem; color: var(--muted); }
+.meta .acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mini { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 4px 12px; font-size: 0.8125rem; font-weight: 600; }
+.mini.warn { border-color: var(--mask); color: var(--mask); }
+.mini:disabled { opacity: 0.45; cursor: default; }
+.tag { color: var(--mask); font-weight: 600; }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+.col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.col h2 { display: flex; align-items: center; gap: 8px; }
+.col.am h2 { color: var(--am); } .col.pm h2 { color: var(--pm); }
+ol.plain .step { grid-template-columns: 1.5rem minmax(0, 1fr); }
+
+.list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.list li { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.list li.today { border-color: var(--mask); background: var(--mask-bg); }
+.list .d { font-family: var(--font-mono); font-size: 0.875rem; }
+.list .rel { font-size: 0.8125rem; color: var(--muted); }
+
+.months { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+.month { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.grid .h { text-align: center; font-size: 0.6875rem; color: var(--muted); font-weight: 600; }
+.grid .c { aspect-ratio: 1; display: grid; place-items: center; border-radius: 8px; font-family: var(--font-mono); font-size: 0.8125rem; color: var(--muted); }
+.grid .c.m { background: var(--mask); color: var(--bg); font-weight: 500; }
+.grid .c.t { outline: 2px solid var(--fg); outline-offset: 1px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 0.875rem; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend b { display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: 6px; background: var(--mask); color: var(--bg); font-family: var(--font-mono); font-size: 0.75rem; font-weight: 500; }
+
+.ucard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.day { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.day.today { border-color: var(--accent); }
+.day h2 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.day h2 .rel { font-family: var(--font-body); font-weight: 500; font-size: 0.8125rem; color: var(--muted); }
+.ppl { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.pp { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pp strong { font-size: 0.9375rem; }
+.sess { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 0.875rem; }
+.sess .k { font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.sess .k svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sess.am .k { color: var(--am); } .sess.pm .k { color: var(--pm); }
+.sess .cnt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.sess .names { color: var(--muted); }
+.sess .none { color: var(--muted); font-style: italic; }
+.mk { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--mask); font-weight: 600; }
+.tscroll { overflow-x: auto; max-width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+table.log { border-collapse: separate; border-spacing: 0; font-size: 0.8125rem; min-width: 100%; }
+table.log th, table.log td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; text-align: center; vertical-align: middle; }
+table.log th { font-weight: 600; color: var(--muted); background: var(--surface); }
+table.log th.date { padding: 8px 6px 2px; line-height: 1.2; white-space: nowrap; color: var(--fg); }
+table.log th.date.mask { color: var(--mask); }
+table.log th.s { font-size: 0.6875rem; letter-spacing: 0.06em; padding: 2px 0 6px; width: 2.4rem; min-width: 2.4rem; }
+table.log th.s.am { color: var(--am); } table.log th.s.pm { color: var(--pm); }
+table.log th.prod { position: sticky; left: 0; z-index: 1; text-align: left; padding: 8px 12px; white-space: nowrap; color: var(--fg); background: var(--surface); box-shadow: 1px 0 0 var(--line); }
+table.log thead th.prod { font-family: var(--font-display); font-size: 1.05rem; vertical-align: bottom; }
+table.log td { height: 2.4rem; }
+table.log td span { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 6px; }
+table.log td svg, .legend .sw svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+table.log td.yes span, .sw.yes { color: var(--ok-fg); background: var(--ok-bg); }
+table.log td.no span, .sw.no { color: var(--bad-fg); background: var(--bad-bg); }
+table.log td.na, .sw.na { background: var(--na); }
+table.log .today { background-color: var(--today-bg); }
+table.log th.prod.today { background: var(--surface); }
+.legend .sw { display: inline-grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 5px; border: 1px solid var(--line); }
+.legend .sw.mk { background: var(--mask-bg); border-color: var(--mask); }
+.form { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field label { font-weight: 600; font-size: 0.9375rem; }
+.field input[type="date"], .field input[type="text"], .addrow input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-width: 0; width: 100%; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg label { padding: 8px 12px; font-weight: 600; font-size: 0.875rem; color: var(--muted); cursor: pointer; }
+.seg input { position: absolute; opacity: 0; width: 0; height: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--accent-fg); }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.err { color: var(--bad-fg); font-size: 0.875rem; margin: 0; }
+.trips { display: flex; flex-direction: column; gap: 8px; }
+.tripcard { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.tripcard strong { display: block; }
+.pl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pl li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px 6px 4px 4px; }
+.pl .item { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: 10px; align-items: center; text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 10px; }
+.pl .item .box { width: 1.5rem; height: 1.5rem; border: 2px solid var(--line); border-radius: 8px; display: grid; place-items: center; }
+.pl .item .box svg { width: 14px; height: 14px; stroke: var(--accent-fg); stroke-width: 3; fill: none; opacity: 0; }
+.pl .item[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); }
+.pl .item[aria-pressed="true"] .box svg { opacity: 1; }
+.pl .item[aria-pressed="true"] .nm { text-decoration: line-through; color: var(--muted); }
+.pl .nm { font-weight: 600; display: block; }
+.pl .qt { font-size: 0.8125rem; color: var(--muted); display: block; }
+.x { border: 0; background: none; color: var(--muted); width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; }
+.x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
+.addrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.danger { border-color: var(--bad-fg); color: var(--bad-fg); }
+.gate { display: flex; justify-content: center; padding-top: 10vh; }
+.gatecard { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; max-width: 420px; width: 100%; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.gateicon { width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--line); }
+footer { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.account { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.members summary { cursor: pointer; font-weight: 600; font-size: 0.9375rem; }
+.members ul.plain { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.members ul.plain li { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px 6px 6px 12px; font-size: 0.9375rem; }
+.members .addrow { margin-top: 6px; }
+.field input[type="email"] { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; min-width: 0; width: 100%; }
+.uhead { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.uhead .thumb { width: 3rem; height: 3.75rem; }
+.uhead strong { display: block; }
+.chip { font-size: 0.75rem; font-weight: 600; border-radius: 999px; padding: 2px 10px; border: 1px solid var(--line); white-space: nowrap; }
+.chip.in { color: var(--accent); border-color: var(--accent); }
+.chip.out { color: var(--mask); border-color: var(--mask); }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.fact { display: flex; flex-direction: column; gap: 2px; }
+.fact .v { font-family: var(--font-mono); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.est { margin: 0; font-weight: 600; }
+.hist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; font-size: 0.8125rem; color: var(--muted); }
+.uact { display: flex; justify-content: flex-end; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.row { display: flex; gap: 8px; align-items: stretch; min-height: 4.25rem; }
+.thumb { flex: none; width: 3.5rem; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: block; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb.none { display: grid; place-items: center; color: var(--muted); }
+.thumb.none svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; }
+.thumbs { display: flex; gap: 6px; }
+.banner .thumb { width: 3.5rem; height: 4.5rem; }
+.list .thumb { width: 3rem; height: 3.75rem; }
+.lb { position: fixed; inset: 0; z-index: 20; background: var(--scrim); color: var(--scrim-fg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.lb img { max-width: 100%; max-height: 76%; object-fit: contain; border-radius: 12px; }
+.lb p { margin: 0; text-align: center; font-weight: 600; }
+.lb button { border: 1px solid var(--scrim-fg); background: transparent; color: var(--scrim-fg); border-radius: 999px; padding: 8px 22px; font-weight: 600; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.card { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.card .step { border: 0; background: transparent; border-radius: 14px; }
+.card .meta { padding: 0 12px 10px calc(12px + 1.5rem + 10px); }
+.pdfbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pdfbtn { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); border-radius: 999px; padding: 8px 18px; font-weight: 600; }
+.pdfbtn.alt { background: transparent; color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="gate" class="gate"></div>
+<div class="wrap" id="wrap" hidden>
+  <header>
+    <div class="top"><div class="who" role="group" aria-label="Whose routine">
+      <button id="p-jonathan" data-person="jonathan" aria-pressed="true">Jonathan</button>
+      <button id="p-wife" data-person="wife" aria-pressed="false">Monique</button>
+    </div><img class="mark" src="img/app-icon.jpg" alt=""></div>
+    <div class="tabs" role="tablist">
+      <button id="t-today" role="tab" data-view="today" aria-selected="true">Today</button>
+      <button id="t-routine" role="tab" data-view="routine" aria-selected="false">Routine</button>
+      <button id="t-masks" role="tab" data-view="masks" aria-selected="false">Masks</button>
+      <button id="t-usage" role="tab" data-view="usage" aria-selected="false">Product usage</button>
+      <button id="t-log" role="tab" data-view="log" aria-selected="false">Daily log</button>
+      <button id="t-trip" role="tab" data-view="trip" aria-selected="false">Trip planning</button>
+    </div>
+  </header>
+  <main id="app"></main>
+  <footer id="acct"></footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+var CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg>';
+var SUN = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+var MOON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>';
+
+// ---- Data: edit here to change products, order, or the mask rotation ----
+// Every product counts as new on this date. Jonathan and Monique each have their own bottles and their own counts.
+var SEED = "2026-11-03";
+
+function P(id, name, brand, img, sessions) {
+  return { id: id, name: name, brand: brand, img: img, sessions: sessions || ["am", "pm"] };
+}
+var SHARED = [
+  P("cleanser", "Water Foam Cleanser", "Dermalance", "img/dermalance-cleanser.jpg"),
+  P("spray", "H2P Spray", "H2P", "img/h2p-spray.jpg"),
+  P("eye", "Eylain eye solution", "Vrelain", "img/eylain-him-3.jpg"),
+  P("toner", "Black Awakening Fluid (toner)", "Evercell", "img/evercell-toner.jpg"),
+  P("serum", "Black Activating Serum", "Evercell", "img/evercell-serum.jpg")
+];
+var DAY_CREAM = P("daycream", "Day Cream (Black Vitalizing Cream)", "Evercell", "img/evercell-day-cream.jpg", ["am"]);
+var SUNSCREEN = P("sunscreen", "Sunscreen", "", null, ["am"]);
+var NIGHT_CREAM = P("nightcream", "Night Cream (PDRN)", "Pyderin", "img/pyderin-night-cream.jpg", ["pm"]);
+
+var HER_SHARED = [
+  P("foam", "Purifying Cleansing Foam", "oera", "img/oera-foam.jpg"),
+  P("spray", "H2P Spray", "H2P", "img/h2p-spray.jpg"),
+  P("toner", "PDRN Lift Toner", "Pyderin", "img/pyderin-toner.jpg"),
+  P("eye", "Eylain eye solution", "Vrelain", "img/eylain-her-4.jpg"),
+  P("lotion", "Hydralift Essence-in-Lotion", "oera", "img/oera-lotion.jpg")
+];
+var HER_DAY = P("daycream", "Day Cream (Calibrating Care)", "oera", "img/oera-day-cream.jpg", ["am"]);
+var HER_NIGHT = P("nightcream", "Night Cream (PDRN Lift)", "Pyderin", "img/pyderin-night-cream.jpg", ["pm"]);
+
+var PEOPLE = {
+  jonathan: { name: "Jonathan", labeled: true, am: SHARED.concat([DAY_CREAM, SUNSCREEN]), pm: SHARED.concat([NIGHT_CREAM]) },
+  wife: { name: "Monique", labeled: false, am: HER_SHARED.concat([HER_DAY, SUNSCREEN]), pm: HER_SHARED.concat([HER_NIGHT]) }
+};
+
+// Masks: first one on START, then one every 3 days, cycling in this order.
+var MASKS = [
+  { name: "Metabolic mask pack", brand: "H2P", short: "M", img: "img/mask-metabolic.jpg" },
+  { name: "Vacation Refresh Mask", brand: "Clabiane", short: "V", img: "img/mask-clabiane.jpg", alt: { name: "Dermabotul Super Slim Facial Mask", brand: "BoLC", img: "img/dermabotul-mask.jpg" } },
+  { name: "PDRN Mask (Face)", brand: "Pyderin", short: "P", img: "img/mask-pyderin.jpg" }
+];
+var START = Date.UTC(2026, 10, 9);
+var EVERY = 3;
+var DAY = 86400000;
+
+// ---- Date helpers ----
+function pad(n) { return (n < 10 ? "0" : "") + n; }
+function nowParts() {
+  var d = new Date();
+  return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), h: d.getHours(), utc: Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) };
+}
+function todayKey() { var t = nowParts(); return t.y + "-" + pad(t.m + 1) + "-" + pad(t.d); }
+function toUtc(key) { var p = key.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
+function toKey(utc) { var d = new Date(utc); return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()); }
+function daysBetween(a, b) { return Math.round((toUtc(b) - toUtc(a)) / DAY); }
+function fmt(utc, opts) { return new Date(utc).toLocaleDateString("en-US", Object.assign({ timeZone: "UTC" }, opts)); }
+function fmtKey(key) { return fmt(toUtc(key), { month: "short", day: "numeric" }); }
+function maskFor(utc) {
+  var n = Math.round((utc - START) / DAY);
+  if (n < 0 || n % EVERY !== 0) return null;
+  return MASKS[(n / EVERY) % MASKS.length];
+}
+function nextMask(utc) {
+  var n = Math.round((utc - START) / DAY);
+  n = n <= 0 ? 0 : Math.ceil(n / EVERY) * EVERY;
+  return { utc: START + n * DAY, mask: MASKS[(n / EVERY) % MASKS.length] };
+}
+function rel(utc, today) {
+  var n = Math.round((utc - today) / DAY);
+  if (n === 0) return "Today";
+  if (n === 1) return "Tomorrow";
+  return "In " + n + " days";
+}
+
+// ---- State ----
+var state = { person: "jonathan", view: "today", session: (nowParts().h >= 3 && nowParts().h < 14) ? "am" : "pm", confirm: null };
+var DB = null;
+var dbState = "loading";  // loading | ready | offline | slow
+var canWrite = true;
+var checks = {};          // checks/<person>_<date>_<session> -> { person, date, session, steps: [productId] }
+var bottles = {};         // bottles/<person>_<productId> -> { person, pid, startedOn, status, emptiedOn?, cycles: [] }
+var idx = {};             // "<person>|<pid>" -> [dates checked off]
+var queues = {};
+var trips = {};           // trips/<id> -> { id, person, leave, leaveAt, ret, retAt, items: [...], createdOn }
+var tripUi = { mode: "list", id: null, err: "", msg: "" };
+
+function canAct() { return canWrite && (dbState === "ready" || dbState === "offline"); }
+
+function reindex() {
+  idx = {};
+  Object.keys(checks).forEach(function (id) {
+    var d = checks[id];
+    if (!d || !d.steps) return;
+    d.steps.forEach(function (pid) { (idx[d.person + "|" + pid] = idx[d.person + "|" + pid] || []).push(d.date); });
+  });
+}
+function getBottle(person, pid) {
+  var b = bottles[person + "_" + pid];
+  if (b) return b;
+  return { person: person, pid: pid, startedOn: SEED, status: "active", cycles: [] };
+}
+function usesOf(person, pid) {
+  var b = getBottle(person, pid), dates = idx[person + "|" + pid] || [], n = 0;
+  dates.forEach(function (d) {
+    if (d >= b.startedOn && (b.status !== "empty" || d <= b.emptiedOn)) n++;
+  });
+  return n;
+}
+function save(path, data) {
+  if (!DB) return;
+  var prev = queues[path] || Promise.resolve();
+  queues[path] = prev.then(function () { return DB.doc(path).set(data); }).catch(function () { dbState = "slow"; render(); });
+}
+function isOn(pid) {
+  var d = checks[state.person + "_" + todayKey() + "_" + state.session];
+  return !!(d && d.steps && d.steps.indexOf(pid) >= 0);
+}
+function toggleStep(pid) {
+  if (!canAct()) return;
+  if (getBottle(state.person, pid).status === "empty") return;
+  var date = todayKey(), id = state.person + "_" + date + "_" + state.session;
+  var doc = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { person: state.person, date: date, session: state.session, steps: [] };
+  var i = doc.steps.indexOf(pid);
+  if (i >= 0) doc.steps.splice(i, 1); else doc.steps.push(pid);
+  checks[id] = doc;
+  reindex();
+  save("checks/" + id, doc);
+}
+function markEmpty(pid) {
+  if (!canAct()) return;
+  var b = getBottle(state.person, pid), today = todayKey();
+  var nb = { person: state.person, pid: pid, startedOn: b.startedOn, status: "empty", emptiedOn: today,
+             cycles: b.cycles.concat([{ startedOn: b.startedOn, emptiedOn: today, uses: usesOf(state.person, pid) }]) };
+  bottles[state.person + "_" + pid] = nb;
+  save("bottles/" + state.person + "_" + pid, nb);
+}
+function startNew(pid) {
+  if (!canAct()) return;
+  var b = getBottle(state.person, pid);
+  var nb = { person: state.person, pid: pid, startedOn: todayKey(), status: "active", cycles: b.cycles };
+  bottles[state.person + "_" + pid] = nb;
+  save("bottles/" + state.person + "_" + pid, nb);
+}
+
+// ---- Usage math ----
+function productsOf(p) {
+  var seen = {}, out = [];
+  p.am.concat(p.pm).forEach(function (s) { if (!seen[s.id]) { seen[s.id] = 1; out.push(s); } });
+  return out;
+}
+function statsOf(person, s, today) {
+  var b = getBottle(person, s.id), uses = usesOf(person, s.id);
+  var end = b.status === "empty" ? b.emptiedOn : today;
+  var days = Math.max(1, daysBetween(b.startedOn, end) + 1);
+  var perDay = s.sessions.length;
+  if (days >= 7 && uses > 0) perDay = uses / days;
+  var avg = null;
+  if (b.cycles.length) avg = b.cycles.reduce(function (a, c) { return a + c.uses; }, 0) / b.cycles.length;
+  var daysLeft = null, estKey = null;
+  if (b.status !== "empty" && avg !== null) {
+    daysLeft = Math.ceil(Math.max(0, avg - uses) / perDay);
+    estKey = toKey(toUtc(today) + daysLeft * DAY);
+  }
+  return { b: b, uses: uses, days: days, avg: avg, daysLeft: daysLeft, estKey: estKey };
+}
+
+// ---- Views ----
+function thumb(img, cap) {
+  if (!img) return '<div class="thumb none" aria-hidden="true">' + SUN + '</div>';
+  return '<button class="thumb" data-img="' + img + '" data-cap="' + cap + '" aria-label="View photo of ' + cap + '"><img src="' + img + '" alt="" loading="lazy"></button>';
+}
+function capOf(s) { return s.name + (s.brand ? ", " + s.brand : ""); }
+
+function notice() {
+  if (dbState === "offline") return '<div class="notice">Not connected, so check-offs and usage are not being saved.</div>';
+  if (dbState === "slow") return '<div class="notice">Saved data has not loaded yet, so counts may be out of date.</div>';
+  if (!canWrite) return '<div class="notice">You have view-only access, so check-offs and Empty are turned off.</div>';
+  return "";
+}
+
+function emptyControls(s) {
+  var b = getBottle(state.person, s.id), dis = canAct() ? "" : " disabled";
+  if (b.status === "empty") return '<button class="mini" data-new="' + s.id + '"' + dis + '>Started new</button>';
+  if (state.confirm === s.id) {
+    return '<span class="tag">Mark empty?</span><button class="mini warn" data-empty-yes="' + s.id + '"' + dis + '>Yes, empty</button><button class="mini" data-empty-no="1">Cancel</button>';
+  }
+  return '<button class="mini" data-empty="' + s.id + '"' + dis + '>Empty</button>';
+}
+function metaLine(s) {
+  var b = getBottle(state.person, s.id), uses = usesOf(state.person, s.id);
+  var left = b.status === "empty"
+    ? '<span class="tag">Empty since ' + fmtKey(b.emptiedOn) + '</span>'
+    : '<span class="mono">Used ' + uses + (uses === 1 ? " time" : " times") + ' since ' + fmtKey(b.startedOn) + '</span>';
+  return '<div class="meta">' + left + '<span class="acts">' + emptyControls(s) + '</span></div>';
+}
+
+function stepRows(list, interactive) {
+  return list.map(function (s, i) {
+    var inner = '<span class="n">' + (i + 1) + '</span><span><span class="name">' + s.name + '</span>' + (s.brand ? '<span class="brand">' + s.brand + '</span>' : '') + '</span>';
+    if (!interactive) return '<li class="row">' + thumb(s.img, capOf(s)) + '<div class="step">' + inner + '</div></li>';
+    var empty = getBottle(state.person, s.id).status === "empty";
+    return '<li class="pc"><div class="row">' + thumb(s.img, capOf(s)) + '<div class="card">' +
+      '<button class="step" data-step="' + s.id + '" aria-pressed="' + isOn(s.id) + '"' + (empty ? ' aria-disabled="true"' : '') + '>' + inner + '<span class="box">' + CHECK + '</span></button>' +
+      metaLine(s) + '</div></div></li>';
+  }).join("");
+}
+
+function maskBanner(t) {
+  var m = maskFor(t.utc);
+  if (m) {
+    return '<div class="banner"><div class="txt"><span class="label">Mask day</span><strong>' + m.name + '</strong><span class="note">' + m.brand + '. Use it in addition to the usual steps.</span>' + (m.alt ? '<span class="note">Out of it? Use ' + m.alt.name + '.</span>' : '') + '</div><div class="thumbs">' + thumb(m.img, capOf(m)) + (m.alt ? thumb(m.alt.img, capOf(m.alt)) : '') + '</div></div>';
+  }
+  var nx = nextMask(t.utc);
+  return '<div class="banner quiet"><div class="txt"><span class="label">No mask today</span><span><strong>Next: ' + fmt(nx.utc, { weekday: "short", month: "short", day: "numeric" }) + '</strong> <span class="note">' + nx.mask.name + ', ' + rel(nx.utc, t.utc).toLowerCase() + '</span></span></div>' + thumb(nx.mask.img, capOf(nx.mask)) + '</div>';
+}
+
+function viewToday() {
+  var t = nowParts(), p = PEOPLE[state.person], list = p[state.session];
+  var done = list.filter(function (s) { return isOn(s.id); }).length;
+  var html = '<div class="stack">';
+  html += '<div><span class="label">' + fmt(t.utc, { weekday: "long" }) + '</span><h1>' + fmt(t.utc, { month: "long", day: "numeric" }) + '</h1></div>';
+  html += notice();
+  html += maskBanner(t);
+  html += '<div class="session" role="group" aria-label="Time of day">' +
+    '<button id="s-am" data-s="am" aria-pressed="' + (state.session === "am") + '">' + SUN + 'Morning</button>' +
+    '<button id="s-pm" data-s="pm" aria-pressed="' + (state.session === "pm") + '">' + MOON + 'Evening</button></div>';
+  html += '<div class="progress"><div class="bar"><i style="width:' + Math.round(done / list.length * 100) + '%"></i></div><span class="mono">' + done + '/' + list.length + '</span></div>';
+  html += '<ol class="steps">' + stepRows(list, true) + '</ol>';
+  if (p.labeled) html += '<p class="note">Step numbers match the handwritten labels on the bottles.</p>';
+  return html + '</div>';
+}
+
+function viewRoutine() {
+  var p = PEOPLE[state.person];
+  var ic = ' width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"';
+  var html = '<div class="stack"><div><h1>' + p.name + '</h1><p class="sub">Apply in this order. Masks go on top of these steps on mask days.</p></div>';
+  html += '<div class="pdfbar"><button class="pdfbtn" data-pdf="' + state.person + '">Download ' + p.name + '\'s PDF</button><button class="pdfbtn alt" data-pdf="' + (state.person === 'wife' ? 'jonathan' : 'wife') + '">Download ' + (state.person === 'wife' ? 'Jonathan' : 'Monique') + '\'s PDF</button><span class="note" id="pdfmsg" role="status"></span></div>';
+  html += '<div class="cols">';
+  html += '<div class="col am"><h2>' + SUN.replace("<svg", "<svg" + ic) + 'Morning</h2><ol class="steps plain">' + stepRows(p.am, false) + '</ol></div>';
+  html += '<div class="col pm"><h2>' + MOON.replace("<svg", "<svg" + ic) + 'Evening</h2><ol class="steps plain">' + stepRows(p.pm, false) + '</ol></div>';
+  return html + '</div></div>';
+}
+
+function monthGrid(y, m, t) {
+  var first = new Date(Date.UTC(y, m, 1)), lead = first.getUTCDay();
+  var days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  var h = ["S", "M", "T", "W", "T", "F", "S"].map(function (x) { return '<div class="h">' + x + '</div>'; }).join("");
+  var c = "";
+  for (var i = 0; i < lead; i++) c += '<div></div>';
+  for (var d = 1; d <= days; d++) {
+    var utc = Date.UTC(y, m, d), mk = maskFor(utc);
+    c += '<div class="c' + (mk ? " m" : "") + (utc === t.utc ? " t" : "") + '"' + (mk ? ' title="' + mk.name + '"' : "") + '>' + (mk ? mk.short : d) + '</div>';
+  }
+  return '<div class="month"><h2>' + fmt(first.getTime(), { month: "long", year: "numeric" }) + '</h2><div class="grid">' + h + c + '</div></div>';
+}
+
+function viewMasks() {
+  var t = nowParts(), html = '<div class="stack"><div><h1>Mask schedule</h1><p class="sub">Starts ' + fmt(START, { weekday: "long", month: "long", day: "numeric" }) + ', then every ' + EVERY + ' days. Both of you use the same rotation.</p></div>';
+  var nx = nextMask(t.utc), items = "";
+  for (var i = 0; i < 8; i++) {
+    var u = nx.utc + i * EVERY * DAY, m = maskFor(u);
+    items += '<li class="' + (u === t.utc ? "today" : "") + '">' + thumb(m.img, capOf(m)) + '<span><span class="d">' + fmt(u, { weekday: "short", month: "short", day: "numeric" }) + '</span><br><strong>' + m.name + '</strong> <span class="rel">' + m.brand + '</span>' + (m.alt ? '<br><span class="rel">If out: ' + m.alt.name + '</span>' : '') + '</span><span class="rel">' + rel(u, t.utc) + '</span></li>';
+  }
+  html += '<ul class="list">' + items + '</ul>';
+  html += '<div class="legend">' + MASKS.map(function (m) { return '<span><b>' + m.short + '</b>' + m.name + '</span>'; }).join("") + '</div>';
+  var alts = MASKS.filter(function (m) { return m.alt; });
+  if (alts.length) html += '<ul class="list">' + alts.map(function (m) { return '<li>' + thumb(m.alt.img, capOf(m.alt)) + '<span><strong>' + m.alt.name + '</strong> <span class="rel">' + m.alt.brand + '</span><br><span class="rel">Substitute when you are out of ' + m.name + '</span></span><span></span></li>'; }).join("") + '</ul>';
+  var months = "";
+  for (var k = 0; k < 3; k++) { var dt = new Date(Date.UTC(t.y, t.m + k, 1)); months += monthGrid(dt.getUTCFullYear(), dt.getUTCMonth(), t); }
+  html += '<div class="months">' + months + '</div></div>';
+  return html;
+}
+
+function viewUsage() {
+  var p = PEOPLE[state.person], today = todayKey();
+  var rows = productsOf(p).map(function (s, i) { return { s: s, i: i, st: statsOf(state.person, s, today) }; });
+  var anyHistory = rows.some(function (r) { return r.st.b.cycles.length > 0; });
+  rows.sort(function (a, b) {
+    var x = a.st.daysLeft, y = b.st.daysLeft;
+    if (x === null && y === null) return a.i - b.i;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return x - y || a.i - b.i;
+  });
+  var html = '<div class="stack"><div><h1>Product usage</h1><p class="sub">' + p.name + '\'s own bottles, counted separately from ' + (state.person === "wife" ? "Jonathan" : "Monique") + '. Every product counted as new on ' + fmtKey(SEED) + '. Each check-off on Today counts as one use.</p></div>';
+  html += notice();
+  if (!anyHistory) html += '<div class="notice">Estimates appear after a product is marked Empty once. Until then each row shows its uses so far.</div>';
+  html += rows.map(function (r) {
+    var s = r.s, st = r.st, b = st.b, out = b.status === "empty";
+    var h = '<div class="ucard"><div class="uhead">' + thumb(s.img, capOf(s)) +
+      '<span><strong>' + s.name + '</strong><span class="note">' + (s.brand || (s.sessions.length === 1 ? "Morning only" : "Morning and evening")) + '</span></span>' +
+      '<span class="chip ' + (out ? "out" : "in") + '">' + (out ? "Empty" : "In use") + '</span></div>';
+    h += '<div class="facts"><div class="fact"><span class="label">First used</span><span class="v">' + fmtKey(b.startedOn) + '</span></div>' +
+      '<div class="fact"><span class="label">Uses</span><span class="v">' + st.uses + '</span></div>' +
+      '<div class="fact"><span class="label">Days</span><span class="v">' + st.days + '</span></div></div>';
+    if (out) {
+      h += '<p class="est">Marked empty ' + fmtKey(b.emptiedOn) + ' after ' + st.uses + ' uses.</p>';
+    } else if (st.daysLeft !== null) {
+      h += '<p class="est">' + (st.daysLeft === 0 ? 'At or past the usual amount. Likely nearly empty.' : 'About ' + st.daysLeft + (st.daysLeft === 1 ? ' day' : ' days') + ' left, around ' + fmtKey(st.estKey) + '.') + '</p>' +
+        '<p class="note">Based on ' + b.cycles.length + (b.cycles.length === 1 ? ' finished bottle' : ' finished bottles') + ' averaging ' + Math.round(st.avg) + ' uses.</p>';
+    } else {
+      h += '<p class="note">No estimate yet. It appears after this product is marked Empty once.</p>';
+    }
+    if (b.cycles.length) {
+      h += '<ul class="hist">' + b.cycles.map(function (c, n) { return '<li>Bottle ' + (n + 1) + ': ' + fmtKey(c.startedOn) + ' to ' + fmtKey(c.emptiedOn) + ', ' + c.uses + ' uses</li>'; }).join("") + '</ul>';
+    }
+    h += '<div class="uact">' + emptyControls(s) + '</div></div>';
+    return h;
+  }).join("");
+  return html + '</div>';
+}
+
+function sessLine(person, date, sess) {
+  var p = PEOPLE[person], list = p[sess], d = checks[person + "_" + date + "_" + sess];
+  var done = list.filter(function (s) { return d && d.steps && d.steps.indexOf(s.id) >= 0; });
+  var k = '<span class="k">' + (sess === "am" ? SUN + 'Morning' : MOON + 'Evening') + '</span>';
+  if (!done.length) return '<div class="sess ' + sess + '">' + k + '<span class="none">nothing checked off</span></div>';
+  var names = done.map(function (s) { return s.name.replace(/\s*\(.*\)$/, ""); }).join(", ");
+  return '<div class="sess ' + sess + '">' + k + '<span><span class="cnt">' + done.length + '/' + list.length + '</span> <span class="names">' + names + '</span></span></div>';
+}
+var TICK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg>';
+var CROSS = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+function logTable(who, keys, today) {
+  var p = PEOPLE[who], prods = productsOf(p);
+  var head = '<tr><th class="prod" rowspan="2">' + p.name + '</th>' + keys.map(function (k) {
+    var u = toUtc(k);
+    return '<th colspan="2" class="date' + (k === today ? ' today' : '') + (maskFor(u) ? ' mask' : '') + '">' + fmt(u, { weekday: "short" }) + '<br>' + fmt(u, { month: "numeric", day: "numeric" }) + '</th>';
+  }).join("") + '</tr><tr>' + keys.map(function (k) {
+    return '<th class="s am' + (k === today ? ' today' : '') + '">AM</th><th class="s pm' + (k === today ? ' today' : '') + '">PM</th>';
+  }).join("") + '</tr>';
+  var body = prods.map(function (s) {
+    var cells = keys.map(function (k) {
+      return ["am", "pm"].map(function (sess) {
+        if (s.sessions.indexOf(sess) < 0) return '<td class="na' + (k === today ? ' today' : '') + '" title="Not part of the ' + (sess === "am" ? "morning" : "evening") + ' routine"></td>';
+        var d = checks[who + "_" + k + "_" + sess], on = !!(d && d.steps && d.steps.indexOf(s.id) >= 0);
+        return '<td class="' + (on ? 'yes' : 'no') + (k === today ? ' today' : '') + '"><span aria-label="' + (on ? 'used' : 'not used') + '">' + (on ? TICK : CROSS) + '</span></td>';
+      }).join("");
+    }).join("");
+    return '<tr><th class="prod" scope="row">' + s.name.replace(/\s*\(.*\)$/, "") + '</th>' + cells + '</tr>';
+  }).join("");
+  return '<div class="tscroll"><table class="log"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+}
+function viewLog() {
+  var t = nowParts(), today = todayKey();
+  var dates = {};
+  Object.keys(checks).forEach(function (id) { var d = checks[id]; if (d && d.date && d.steps && d.steps.length) dates[d.date] = 1; });
+  for (var i = 0; i < 7; i++) dates[toKey(t.utc - i * DAY)] = 1;
+  var keys = Object.keys(dates).filter(function (k) { return k >= SEED && k <= today; }).sort();
+  var html = '<div class="stack"><div><h1>Daily log</h1><p class="sub">Each product by day and time. Green check: used. Red X: not checked off. Gray: not part of that routine. The last 7 days always show; earlier days show when something was recorded.</p></div>';
+  html += notice();
+  html += '<div class="legend"><span><i class="sw yes">' + TICK + '</i>Used</span><span><i class="sw no">' + CROSS + '</i>Not used</span><span><i class="sw na"></i>Not in that routine</span><span><i class="sw mk"></i>Mask day</span></div>';
+  html += logTable("jonathan", keys, today) + logTable("wife", keys, today);
+  return html + '</div>';
+}
+
+function render() {
+  var app = document.getElementById("app");
+  app.innerHTML = state.view === "today" ? viewToday() : state.view === "routine" ? viewRoutine() : state.view === "masks" ? viewMasks() : state.view === "log" ? viewLog() : state.view === "trip" ? viewTrip() : viewUsage();
+  var ab = document.getElementById("acct"); if (ab) ab.innerHTML = accountBar();
+  document.querySelectorAll(".who button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.person === state.person); });
+  document.querySelectorAll(".tabs button").forEach(function (b) { b.setAttribute("aria-selected", b.dataset.view === state.view); });
+}
+
+// ---- Trip planning ----
+function tripSessions(leave, leaveAt, ret, retAt) {
+  var out = { am: 0, pm: 0, masks: {}, days: 0 };
+  for (var u = toUtc(leave); u <= toUtc(ret); u += DAY) {
+    var k = toKey(u), am = true, pm = true;
+    if (k === leave && leaveAt === "pm") am = false;
+    if (k === ret && retAt === "am") pm = false;
+    if (!am && !pm) continue;
+    out.days++;
+    if (am) out.am++;
+    if (pm) out.pm++;
+    var m = maskFor(u);
+    if (m) out.masks[m.name] = (out.masks[m.name] || 0) + 1;
+  }
+  return out;
+}
+function buildItems(person, leave, leaveAt, ret, retAt) {
+  var p = PEOPLE[person], s = tripSessions(leave, leaveAt, ret, retAt), items = [];
+  productsOf(p).forEach(function (pr) {
+    var uses = (pr.sessions.indexOf("am") >= 0 ? s.am : 0) + (pr.sessions.indexOf("pm") >= 0 ? s.pm : 0);
+    if (uses > 0) items.push({ id: pr.id, name: pr.name, note: (pr.brand ? pr.brand + " · " : "") + uses + (uses === 1 ? " use" : " uses"), packed: false, custom: false });
+  });
+  MASKS.forEach(function (m) {
+    var n = s.masks[m.name];
+    if (n) items.push({ id: "mask-" + m.short, name: m.name, note: m.brand + " · " + n + (n === 1 ? " mask day" : " mask days") + (m.alt ? " · or " + m.alt.name : ""), packed: false, custom: false });
+  });
+  return items;
+}
+function tripTitle(t) { return t.name ? t.name : tripDates(t); }
+function tripDates(t) {
+  return fmt(toUtc(t.leave), { month: "short", day: "numeric" }) + " " + t.leaveAt.toUpperCase() + " to " + fmt(toUtc(t.ret), { month: "short", day: "numeric" }) + " " + t.retAt.toUpperCase();
+}
+function saveTrip(t) { trips[t.id] = t; save("trips/" + t.id, t); }
+function tripForm(t) {
+  var who = t ? t.person : state.person, leave = t ? t.leave : todayKey(), ret = t ? t.ret : toKey(toUtc(todayKey()) + 3 * DAY);
+  var lAt = t ? t.leaveAt : "am", rAt = t ? t.retAt : "pm";
+  function seg(name, val) {
+    return '<span class="seg"><input type="radio" name="' + name + '" id="' + name + '-am" value="am"' + (val === "am" ? " checked" : "") + '><label for="' + name + '-am">AM</label><input type="radio" name="' + name + '" id="' + name + '-pm" value="pm"' + (val === "pm" ? " checked" : "") + '><label for="' + name + '-pm">PM</label></span>';
+  }
+  return '<form class="form" id="tripform"' + (t ? ' data-edit="' + t.id + '"' : '') + '>' +
+    '<div class="field"><label>Who is this trip for?</label><span class="seg"><input type="radio" name="who" id="who-j" value="jonathan"' + (who === "jonathan" ? " checked" : "") + '><label for="who-j">Jonathan</label><input type="radio" name="who" id="who-w" value="wife"' + (who === "wife" ? " checked" : "") + '><label for="who-w">Monique</label></span></div>' +
+    '<div class="field"><label for="tripname">Trip name (optional)</label><input type="text" id="tripname" name="tripname" maxlength="80" value="' + (t && t.name ? t.name.replace(/"/g, '&quot;') : '') + '" placeholder="e.g. Telluride"></div>' +
+    ttPicker() +
+    '<div class="two"><div class="field"><label for="leave">Leaving</label><div class="pair"><input type="date" id="leave" name="leave" value="' + leave + '" required>' + seg("leaveAt", lAt) + '</div></div>' +
+    '<div class="field"><label for="ret">Returning</label><div class="pair"><input type="date" id="ret" name="ret" value="' + ret + '" required>' + seg("retAt", rAt) + '</div></div></div>' +
+    '<p class="note">Leaving AM means the morning routine on departure day happens away. Returning AM means that morning is away and that evening is at home.</p>' +
+    (tripUi.err ? '<p class="err">' + tripUi.err + '</p>' : '') +
+    '<div class="btnrow"><button type="submit" class="pdfbtn"' + (canAct() ? '' : ' disabled') + '>' + (t ? 'Update dates' : 'Make packing list') + '</button><button type="button" class="pdfbtn alt" data-trip-cancel="1">Cancel</button></div></form>';
+}
+function submitTrip(form) {
+  var who = form.who.value, leave = form.leave.value, ret = form.ret.value, lAt = form.leaveAt.value, rAt = form.retAt.value, name = (form.tripname.value || "").trim();
+  if (!leave || !ret) { tripUi.err = "Please pick both dates."; return; }
+  if (ret < leave) { tripUi.err = "The return date is before the departure date."; return; }
+  if (leave === ret && lAt === "pm" && rAt === "am") { tripUi.err = "Leaving PM and returning AM the same day leaves nothing to pack for."; return; }
+  tripUi.err = "";
+  var items = buildItems(who, leave, lAt, ret, rAt);
+  if (form.dataset.edit && trips[form.dataset.edit]) {
+    var old = trips[form.dataset.edit];
+    var keep = {}; old.items.forEach(function (i) { keep[i.id] = i; });
+    items = items.map(function (i) { return keep[i.id] ? Object.assign({}, i, { packed: keep[i.id].packed }) : i; }).concat(old.items.filter(function (i) { return i.custom; }));
+    saveTrip(Object.assign({}, old, { person: who, name: name, leave: leave, leaveAt: lAt, ret: ret, retAt: rAt, items: items }));
+    tripUi.mode = "view"; tripUi.id = old.id;
+  } else {
+    var id = "t" + Date.now();
+    saveTrip({ id: id, person: who, name: name, leave: leave, leaveAt: lAt, ret: ret, retAt: rAt, items: items, createdOn: todayKey() });
+    tripUi.mode = "view"; tripUi.id = id;
+  }
+}
+function tripUpdate(id, fn) {
+  var t = trips[id]; if (!t || !canAct()) return;
+  var nt = JSON.parse(JSON.stringify(t)); fn(nt); saveTrip(nt);
+}
+function viewTripDetail(t) {
+  var s = tripSessions(t.leave, t.leaveAt, t.ret, t.retAt), packed = t.items.filter(function (i) { return i.packed; }).length;
+  var html = '<div class="stack"><div><span class="label">' + PEOPLE[t.person].name + (t.name ? ' \u00b7 ' + tripDates(t) : '') + '</span><h1>' + tripTitle(t) + '</h1><p class="sub">' + s.days + (s.days === 1 ? ' day' : ' days') + ' away: ' + s.am + ' mornings, ' + s.pm + ' evenings' + (Object.keys(s.masks).length ? ', ' + Object.keys(s.masks).reduce(function (a, k) { return a + s.masks[k]; }, 0) + ' mask days' : '') + '.</p></div>';
+  html += notice();
+  html += '<div class="progress"><div class="bar"><i style="width:' + (t.items.length ? Math.round(packed / t.items.length * 100) : 0) + '%"></i></div><span class="mono">' + packed + '/' + t.items.length + ' packed</span></div>';
+  html += '<ul class="pl">' + t.items.map(function (i, n) {
+    return '<li><button class="item" data-pack="' + n + '" aria-pressed="' + !!i.packed + '"' + (canAct() ? '' : ' disabled') + '><span class="box">' + CHECK + '</span><span><span class="nm">' + i.name + '</span>' + (i.note ? '<span class="qt">' + i.note + '</span>' : '') + '</span></button><button class="x" data-unpack="' + n + '" aria-label="Remove ' + i.name + '"' + (canAct() ? '' : ' disabled') + '><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></li>';
+  }).join("") + '</ul>';
+  html += '<form class="addrow" id="addform"><input type="text" name="item" placeholder="Add an item" aria-label="Add an item" maxlength="80"' + (canAct() ? '' : ' disabled') + '><button type="submit" class="mini"' + (canAct() ? '' : ' disabled') + '>Add</button></form>';
+  html += '<div class="btnrow"><button class="pdfbtn" data-trip-pdf="' + t.id + '">Download PDF</button><button class="pdfbtn alt" data-trip-edit="' + t.id + '"' + (canAct() ? '' : ' disabled') + '>Edit dates</button><button class="pdfbtn alt" data-trip-back="1">All trips</button><span class="note" id="pdfmsg" role="status">' + tripUi.msg + '</span></div>';
+  html += tripUi.confirmDel ? '<div class="btnrow"><span class="tag">Delete this trip and its list?</span><button class="mini warn" data-trip-del-yes="' + t.id + '">Yes, delete</button><button class="mini" data-trip-del-no="1">Cancel</button></div>' : '<div class="btnrow"><button class="mini danger" data-trip-del="' + t.id + '"' + (canAct() ? '' : ' disabled') + '>Delete trip</button></div>';
+  return html + '</div>';
+}
+function viewTrip() {
+  if (tripUi.mode === "new") return '<div class="stack"><div><h1>New trip</h1><p class="sub">Tell me who is going and when, and I will list the products to pack.</p></div>' + notice() + tripForm(null) + '</div>';
+  if (tripUi.mode === "edit" && trips[tripUi.id]) return '<div class="stack"><div><h1>Edit trip</h1><p class="sub">Changing the dates rebuilds the product list. Items you added yourself are kept.</p></div>' + tripForm(trips[tripUi.id]) + '</div>';
+  if (tripUi.mode === "view" && trips[tripUi.id]) return viewTripDetail(trips[tripUi.id]);
+  var list = Object.keys(trips).map(function (k) { return trips[k]; }).sort(function (a, b) { return a.leave < b.leave ? 1 : a.leave > b.leave ? -1 : 0; });
+  var html = '<div class="stack"><div><h1>Trip planning</h1><p class="sub">Packing lists for each trip, built from the routine and the mask schedule.</p></div>' + notice();
+  html += '<div class="btnrow"><button class="pdfbtn" data-trip-new="1"' + (canAct() ? '' : ' disabled') + '>Plan a trip</button></div>';
+  if (!list.length) html += '<div class="notice">No trips yet.</div>';
+  else html += '<div class="trips">' + list.map(function (t) {
+    var packed = t.items.filter(function (i) { return i.packed; }).length;
+    return '<button class="tripcard" data-trip-open="' + t.id + '"><span><strong>' + tripTitle(t) + '</strong><span class="note">' + PEOPLE[t.person].name + (t.ret < todayKey() ? ' · past trip' : '') + '</span></span><span class="mono">' + packed + '/' + t.items.length + '</span></button>';
+  }).join("") + '</div>';
+  return html + '</div>';
+}
+function tripPdf(t) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { tripUi.msg = "The PDF tool did not load. Reload the page and try again."; render(); return; }
+  var doc = new window.jspdf.jsPDF({ unit: "pt", format: "letter" });
+  var s = tripSessions(t.leave, t.leaveAt, t.ret, t.retAt), y = 64;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(20); doc.text(PEOPLE[t.person].name + " packing list" + (t.name ? ": " + t.name : ""), 56, y); y += 26;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(12); doc.setTextColor(90);
+  doc.text(fmt(toUtc(t.leave), { weekday: "short", month: "long", day: "numeric" }) + " " + t.leaveAt.toUpperCase() + "  to  " + fmt(toUtc(t.ret), { weekday: "short", month: "long", day: "numeric" }) + " " + t.retAt.toUpperCase(), 56, y); y += 16;
+  doc.text(s.days + (s.days === 1 ? " day" : " days") + " away: " + s.am + " mornings, " + s.pm + " evenings", 56, y); y += 28;
+  doc.setTextColor(0);
+  t.items.forEach(function (i) {
+    if (y > 730) { doc.addPage(); y = 64; }
+    doc.setDrawColor(120); doc.rect(56, y - 11, 13, 13);
+    if (i.packed) { doc.setLineWidth(1.5); doc.line(58.5, y - 5, 62, y - 1); doc.line(62, y - 1, 67, y - 9); doc.setLineWidth(1); }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(i.name, 80, y);
+    if (i.note) { doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(110); doc.text(i.note, 80, y + 13); doc.setTextColor(0); y += 13; }
+    y += 24;
+  });
+  doc.setFontSize(9); doc.setTextColor(140); doc.text("Skin Care Routine · made " + fmt(toUtc(todayKey()), { month: "short", day: "numeric", year: "numeric" }), 56, 760);
+  var blob = doc.output("blob");
+  DL.save({ filename: PEOPLE[t.person].name + "-Packing-List-" + t.leave + ".pdf", data: blob })
+    .then(function () { tripUi.msg = "Downloaded."; render(); })
+    .catch(function () { tripUi.msg = "Could not create the PDF."; render(); });
+}
+document.addEventListener("submit", function (e) {
+  var f = e.target;
+  if (f.id === "tripform") { e.preventDefault(); if (canAct()) submitTrip(f); render(); }
+  else if (f.id === "addform") {
+    e.preventDefault();
+    var v = f.item.value.trim(); if (!v) return;
+    tripUpdate(tripUi.id, function (t) { t.items.push({ id: "c" + Date.now(), name: v, note: "", packed: false, custom: true }); });
+    render();
+  }
+});
+
+// ---- Photo viewer ----
+function closeLb() { var d = document.getElementById("lb"); if (d) d.remove(); }
+function openLb(src, cap) {
+  closeLb();
+  var d = document.createElement("div");
+  d.className = "lb"; d.id = "lb"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", cap);
+  d.innerHTML = '<img src="' + src + '" alt="' + cap + '"><p>' + cap + '</p><button id="lb-close">Close</button>';
+  document.body.appendChild(d);
+  document.getElementById("lb-close").focus();
+}
+document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeLb(); });
+
+document.addEventListener("click", function (e) {
+  if (e.target.closest("#lb")) { closeLb(); return; }
+  var tb = e.target.closest(".thumb[data-img]");
+  if (tb) { openLb(tb.dataset.img, tb.dataset.cap); return; }
+  var b = e.target.closest("button");
+  if (!b || b.disabled) return;
+  var keepConfirm = false;
+  if (b.dataset.person) { state.person = b.dataset.person; picked = true; }
+  else if (b.dataset.view) state.view = b.dataset.view;
+  else if (b.dataset.s) state.session = b.dataset.s;
+  else if (b.dataset.pdf) { getPdf(b.dataset.pdf); return; }
+  else if (b.dataset.tripNew) { tripUi = { mode: "new", id: null, err: "", msg: "" }; }
+  else if (b.dataset.tripOpen) { tripUi = { mode: "view", id: b.dataset.tripOpen, err: "", msg: "" }; }
+  else if (b.dataset.tripEdit) { tripUi = { mode: "edit", id: b.dataset.tripEdit, err: "", msg: "" }; }
+  else if (b.dataset.tripCancel) { tripUi = { mode: tripUi.id && trips[tripUi.id] ? "view" : "list", id: tripUi.id, err: "", msg: "" }; }
+  else if (b.dataset.tripBack) { tripUi = { mode: "list", id: null, err: "", msg: "" }; }
+  else if (b.dataset.tripPdf) { tripUi.msg = ""; tripPdf(trips[b.dataset.tripPdf]); return; }
+  else if (b.dataset.pack !== undefined) { tripUpdate(tripUi.id, function (t) { var i = t.items[+b.dataset.pack]; if (i) i.packed = !i.packed; }); }
+  else if (b.dataset.unpack !== undefined) { tripUpdate(tripUi.id, function (t) { t.items.splice(+b.dataset.unpack, 1); }); }
+  else if (b.dataset.tripDel) { tripUi.confirmDel = true; }
+  else if (b.dataset.tripDelNo) { tripUi.confirmDel = false; }
+  else if (b.dataset.tripDelYes) { var did = b.dataset.tripDelYes; delete trips[did]; if (DB) DB.doc("trips/" + did).delete().catch(function () {}); tripUi = { mode: "list", id: null, err: "", msg: "" }; }
+  else if (b.dataset.step !== undefined) toggleStep(b.dataset.step);
+  else if (b.dataset.empty !== undefined) { state.confirm = b.dataset.empty; keepConfirm = true; }
+  else if (b.dataset.emptyYes !== undefined) markEmpty(b.dataset.emptyYes);
+  else if (b.dataset.new !== undefined) startNew(b.dataset.new);
+  else if (b.dataset.emptyNo === undefined) return;
+  if (!keepConfirm) state.confirm = null;
+  render();
+});
+
+// ---- Configuration ----
+// NOTE: this app shares the Firebase project with the Hollywood Bowl donor chart (bowl-donor-chart)
+// so there is one project to manage. Everything this app stores lives in Firestore collections that
+// start with "skincare_", so it can be moved to its own Firebase project later by changing this
+// config and copying those collections. Nothing else is shared with the donor chart.
+var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyABiivA6-u-5mnRTAI9gIy0hubxQSEq41A",
+  authDomain: "bowl-donor-chart.firebaseapp.com",
+  projectId: "bowl-donor-chart",
+  storageBucket: "bowl-donor-chart.firebasestorage.app",
+  messagingSenderId: "681524186675",
+  appId: "1:681524186675:web:c7d17cc3ddcf629aab5d46"
+};
+var FS_PREFIX = "skincare_";
+var OWNER_EMAIL = "jskagan@gmail.com";
+// Travel Tracker's Google OAuth client. Both apps live on jskagan.github.io, so the same client
+// (and the consent you already gave it) covers reading trips-data.json from Drive.
+var DRIVE_CLIENT_ID = "199114602407-31geakspltrct7pu85vm9kofu3c9rfaq.apps.googleusercontent.com";
+var DRIVE_SCOPE = "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/userinfo.email";
+var TRIPS_FILENAME = "trips-data.json";
+
+// ---- Sign-in and membership ----
+var fbAuth = null, fbDb = null, me = null, members = null, authMsg = "";
+function gate(html) {
+  var g = document.getElementById("gate"), w = document.getElementById("wrap");
+  if (html) { g.innerHTML = html; g.hidden = false; w.hidden = true; }
+  else { g.hidden = true; w.hidden = false; }
+}
+function gateCard(title, body, buttons) {
+  return '<div class="gatecard"><img class="gateicon" src="img/icon-192.png" alt=""><h1>' + title + '</h1><p class="sub">' + body + '</p><div class="btnrow">' + buttons + '</div>' + (authMsg ? '<p class="err">' + authMsg + '</p>' : '') + '</div>';
+}
+function showSignIn() {
+  gate(gateCard("Skin Care Routine", "Sign in with the Google account Jonathan invited.", '<button class="pdfbtn" data-signin="1">Sign in with Google</button>'));
+}
+function showDenied() {
+  gate(gateCard("Not on the list", "You are signed in as " + (me.email || "an unknown account") + ", which has not been given access. Ask Jonathan to add this email.", '<button class="pdfbtn alt" data-signout="1">Sign out</button>'));
+}
+function isOwner() { return !!(me && me.email && me.email.toLowerCase() === OWNER_EMAIL); }
+function isMember() { return isOwner() || !!(me && me.email && members && members.indexOf(me.email.toLowerCase()) >= 0); }
+function signIn() {
+  authMsg = "";
+  var provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  fbAuth.signInWithPopup(provider).catch(function (e) {
+    if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) return fbAuth.signInWithRedirect(provider);
+    authMsg = e && e.code === "auth/popup-closed-by-user" ? "" : "Sign-in failed: " + (e && e.message ? e.message : e);
+    showSignIn();
+  });
+}
+function signOut() { fbAuth.signOut(); }
+function startAuth() {
+  try { firebase.initializeApp(FIREBASE_CONFIG); fbAuth = firebase.auth(); fbDb = firebase.firestore(); }
+  catch (e) { gate(gateCard("Could not start", "Firebase did not load. Check your connection and reload.", "")); return; }
+  fbAuth.onAuthStateChanged(function (user) {
+    me = user;
+    if (!user) { stopData(); showSignIn(); return; }
+    gate(gateCard("Checking access", "One moment.", ""));
+    fbDb.doc(FS_PREFIX + "config/members").get().then(function (snap) {
+      members = (snap.exists && snap.data().emails) ? snap.data().emails.map(function (e) { return String(e).toLowerCase(); }) : [];
+      if (isOwner() && !snap.exists) fbDb.doc(FS_PREFIX + "config/members").set({ emails: [OWNER_EMAIL] });
+      if (!isMember()) { showDenied(); return; }
+      gate(null);
+      if (!isOwner() && !picked) state.person = "wife";
+      startDb();
+      render();
+    }).catch(function (e) {
+      authMsg = "Could not read the member list: " + (e && e.message ? e.message : e);
+      showDenied();
+    });
+  });
+}
+function addMember(email) {
+  email = String(email || "").trim().toLowerCase();
+  if (!email || email.indexOf("@") < 0 || !isOwner()) return;
+  var list = (members || []).slice(); if (list.indexOf(OWNER_EMAIL) < 0) list.unshift(OWNER_EMAIL);
+  if (list.indexOf(email) < 0) list.push(email);
+  members = list; fbDb.doc(FS_PREFIX + "config/members").set({ emails: list }); render();
+}
+function removeMember(email) {
+  if (!isOwner() || email === OWNER_EMAIL) return;
+  members = (members || []).filter(function (e) { return e !== email; });
+  fbDb.doc(FS_PREFIX + "config/members").set({ emails: members }); render();
+}
+function accountBar() {
+  if (!me) return "";
+  var h = '<div class="account"><span class="note">Signed in as ' + (me.email || "") + '</span><button class="mini" data-signout="1">Sign out</button></div>';
+  if (isOwner()) {
+    h += '<details class="members"><summary>Who can use this app</summary><ul class="plain">' + (members || [OWNER_EMAIL]).map(function (e) {
+      return '<li><span>' + e + (e === OWNER_EMAIL ? ' <span class="note">(owner)</span>' : '') + '</span>' + (e === OWNER_EMAIL ? '' : '<button class="x" data-member-del="' + e + '" aria-label="Remove ' + e + '"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>') + '</li>';
+    }).join("") + '</ul><form class="addrow" id="memberform"><input type="email" name="email" placeholder="Add a Google account email" aria-label="Email to add"><button type="submit" class="mini">Add</button></form><p class="note">Each person signs in with their own Google account. For Trip planning, share trips-data.json in Google Drive with them too.</p></details>';
+  }
+  return h;
+}
+
+// ---- Saved data (Firestore) ----
+var unsubs = [];
+function stopData() { unsubs.forEach(function (u) { try { u(); } catch (e) {} }); unsubs = []; DB = null; dbState = "loading"; checks = {}; bottles = {}; trips = {}; }
+function startDb() {
+  stopData();
+  DB = {
+    doc: function (path) { var p = path.split("/"); return fbDb.collection(FS_PREFIX + p[0]).doc(p.slice(1).join("/")); },
+    collection: function (name) { return fbDb.collection(FS_PREFIX + name); }
+  };
+  var gotChecks = false, gotBottles = false;
+  var timer = setTimeout(function () { if (dbState === "loading") { dbState = "slow"; render(); } }, 10000);
+  function maybeReady() { if (gotChecks && gotBottles) { clearTimeout(timer); dbState = "ready"; } }
+  function onErr(e) { clearTimeout(timer); dbState = "slow"; authMsg = e && e.message ? e.message : ""; render(); }
+  unsubs.push(DB.collection("checks").onSnapshot(function (snap) {
+    var m = {}; snap.docs.forEach(function (d) { m[d.id] = d.data(); });
+    checks = m; reindex(); gotChecks = true; maybeReady(); render();
+  }, onErr));
+  unsubs.push(DB.collection("trips").onSnapshot(function (snap) {
+    var m = {}; snap.docs.forEach(function (d) { m[d.id] = d.data(); });
+    trips = m; if (state.view === "trip" && !document.getElementById("tripform")) render();
+  }, function () {}));
+  unsubs.push(DB.collection("bottles").onSnapshot(function (snap) {
+    var m = {}; snap.docs.forEach(function (d) { m[d.id] = d.data(); });
+    bottles = m; gotBottles = true; maybeReady(); render();
+  }, onErr));
+}
+
+// ---- Downloads (plain browser downloads on our own site) ----
+function saveBlob(blob, filename) {
+  var url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = filename; a.rel = "noopener"; document.body.appendChild(a); a.click();
+  setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 2000);
+  return Promise.resolve();
+}
+var DL = { save: function (r) { return saveBlob(r.data, r.filename); } };
+function pdfMsg(t) { var m = document.getElementById('pdfmsg'); if (m) m.textContent = t; }
+function getPdf(who) {
+  var file = who === 'wife' ? 'monique' : 'jonathan';
+  fetch('pdf/' + file + '.pdf').then(function (r) { if (!r.ok) throw new Error('x'); return r.blob(); })
+    .then(function (blob) { return saveBlob(blob, PEOPLE[who].name + '-Skin-Care-Routine.pdf'); })
+    .then(function () { pdfMsg('Downloaded.'); })
+    .catch(function () { pdfMsg('Could not download the PDF.'); });
+}
+
+// ---- Trips from Travel Tracker (trips-data.json on Google Drive) ----
+var driveToken = null, driveTokenExp = 0, tokenClient = null, ttTrips = null, ttMsg = "", ttBusy = false;
+function getDriveToken() {
+  return new Promise(function (resolve, reject) {
+    if (driveToken && Date.now() < driveTokenExp) return resolve(driveToken);
+    if (!window.google || !google.accounts || !google.accounts.oauth2) return reject(new Error("Google sign-in library did not load. Reload and try again."));
+    if (!tokenClient) {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE,
+        callback: function (r) {
+          if (r && r.access_token) { driveToken = r.access_token; driveTokenExp = Date.now() + (r.expires_in - 60) * 1000; resolve(driveToken); }
+          else reject(new Error(r && r.error_description ? r.error_description : "No access token."));
+        },
+        error_callback: function (e) { reject(new Error(e && e.message ? e.message : "Sign-in was closed.")); }
+      });
+    } else {
+      tokenClient.callback = function (r) {
+        if (r && r.access_token) { driveToken = r.access_token; driveTokenExp = Date.now() + (r.expires_in - 60) * 1000; resolve(driveToken); }
+        else reject(new Error(r && r.error_description ? r.error_description : "No access token."));
+      };
+      tokenClient.error_callback = function (e) { reject(new Error(e && e.message ? e.message : "Sign-in was closed.")); };
+    }
+    tokenClient.requestAccessToken({ prompt: "", hint: me && me.email ? me.email : undefined });
+  });
+}
+function driveFetch(url, token) {
+  return fetch(url, { headers: { Authorization: "Bearer " + token } }).then(function (r) {
+    if (r.status === 401 || r.status === 403) throw new Error("Google Drive said no (" + r.status + "). Is trips-data.json shared with " + (me && me.email) + "?");
+    if (!r.ok) throw new Error("Google Drive error " + r.status);
+    return r;
+  });
+}
+function loadTravelTrackerTrips() {
+  ttBusy = true; ttMsg = ""; render();
+  getDriveToken().then(function (token) {
+    var q = encodeURIComponent("name='" + TRIPS_FILENAME + "' and trashed=false");
+    return driveFetch("https://www.googleapis.com/drive/v3/files?q=" + q + "&fields=files(id,name,mimeType,modifiedTime)&spaces=drive&supportsAllDrives=true&includeItemsFromAllDrives=true", token)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var files = (j.files || []).filter(function (f) { return !/^application\/vnd\.google-apps\./.test(f.mimeType || ""); });
+        if (!files.length) throw new Error("No trips-data.json found in Google Drive for " + (me && me.email) + ".");
+        files.sort(function (a, b) { return a.modifiedTime < b.modifiedTime ? 1 : -1; });
+        return driveFetch("https://www.googleapis.com/drive/v3/files/" + files[0].id + "?alt=media&supportsAllDrives=true", token);
+      })
+      .then(function (r) { return r.json(); });
+  }).then(function (data) {
+    var today = todayKey();
+    ttTrips = (data.trips || []).filter(function (t) { return t.start && t.end && t.end >= today; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; })
+      .map(function (t) {
+        var flights = (t.events || []).filter(function (e) { return e.type === "flight" && e.start; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+        var dep = flights.length ? flights[0].start : null, arr = flights.length ? (flights[flights.length - 1].end || flights[flights.length - 1].start) : null;
+        function half(iso) { var m = /T(\d\d):/.exec(iso || ""); return m ? (+m[1] < 12 ? "am" : "pm") : null; }
+        return { key: t.key, name: t.name || "Trip", start: t.start, end: t.end, leaveAt: half(dep) || "am", retAt: half(arr) || "pm", dep: dep, arr: arr };
+      });
+    if (!ttTrips.length) ttMsg = "No upcoming trips in Travel Tracker.";
+    ttBusy = false; render();
+  }).catch(function (e) { ttBusy = false; ttTrips = null; ttMsg = e && e.message ? e.message : String(e); render(); });
+}
+function ttPicker() {
+  var h = '<div class="field"><label>Or pick an upcoming trip from Travel Tracker</label>';
+  if (ttBusy) h += '<p class="note">Loading trips from Google Drive…</p>';
+  else if (ttTrips && ttTrips.length) {
+    h += '<div class="trips">' + ttTrips.map(function (t, i) {
+      return '<button type="button" class="tripcard" data-tt="' + i + '"><span><strong>' + t.name + '</strong><span class="note">' + fmtKey(t.start) + ' ' + t.leaveAt.toUpperCase() + ' to ' + fmtKey(t.end) + ' ' + t.retAt.toUpperCase() + (t.dep ? '' : ' · no flight times, AM/PM guessed') + '</span></span><span class="note">Use</span></button>';
+    }).join("") + '</div>';
+  } else h += '<div class="btnrow"><button type="button" class="pdfbtn alt" data-tt-load="1">Load trips from Travel Tracker</button></div>';
+  if (ttMsg) h += '<p class="err">' + ttMsg + '</p>';
+  return h + '</div>';
+}
+function useTtTrip(i) {
+  var t = ttTrips && ttTrips[i], f = document.getElementById("tripform");
+  if (!t || !f) return;
+  f.leave.value = t.start; f.ret.value = t.end;
+  f.querySelector('[name=leaveAt][value=' + t.leaveAt + ']').checked = true;
+  f.querySelector('[name=retAt][value=' + t.retAt + ']').checked = true;
+  f.dataset.tripname = t.name;
+  var n = document.getElementById("tripname"); if (n) n.value = t.name;
+}
+
+document.addEventListener("click", function (e) {
+  var b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.signin) signIn();
+  else if (b.dataset.signout) signOut();
+  else if (b.dataset.ttLoad) loadTravelTrackerTrips();
+  else if (b.dataset.tt !== undefined) useTtTrip(+b.dataset.tt);
+  else if (b.dataset.memberDel) removeMember(b.dataset.memberDel);
+});
+document.addEventListener("submit", function (e) {
+  if (e.target.id === "memberform") { e.preventDefault(); addMember(e.target.email.value); e.target.reset(); }
+});
+var picked = false;
+
+render();
+startAuth();
+</script>
+</body>
+</html>
