@@ -982,27 +982,32 @@ function getDriveToken() {
     if (!tokenClient) {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE,
-        callback: function (r) {
-          if (r && r.access_token) { driveToken = r.access_token; driveTokenExp = Date.now() + (r.expires_in - 60) * 1000; resolve(driveToken); }
-          else reject(new Error(r && r.error_description ? r.error_description : "No access token."));
-        },
-        error_callback: function (e) { reject(new Error(e && e.message ? e.message : "Sign-in was closed.")); }
+        callback: function (r) { tokenCb(r); },
+        error_callback: function (e) { tokenErr(e); }
       });
-    } else {
-      tokenClient.callback = function (r) {
-        if (r && r.access_token) { driveToken = r.access_token; driveTokenExp = Date.now() + (r.expires_in - 60) * 1000; resolve(driveToken); }
-        else reject(new Error(r && r.error_description ? r.error_description : "No access token."));
-      };
-      tokenClient.error_callback = function (e) { reject(new Error(e && e.message ? e.message : "Sign-in was closed.")); };
     }
+    var askedConsent = false;
+    function tokenErr(e) { reject(new Error(e && e.message ? e.message : "Sign-in was closed.")); }
+    function tokenCb(r) {
+      if (!r || !r.access_token) return reject(new Error(r && r.error_description ? r.error_description : "No access token."));
+      // A silent token can come back without the Drive scope if it was never granted to this client; ask once.
+      var ok = google.accounts.oauth2.hasGrantedAllScopes(r, "https://www.googleapis.com/auth/drive");
+      if (!ok && !askedConsent) { askedConsent = true; tokenClient.requestAccessToken({ prompt: "consent", hint: me && me.email ? me.email : undefined }); return; }
+      if (!ok) return reject(new Error("Google did not grant access to Drive."));
+      driveToken = r.access_token; driveTokenExp = Date.now() + (r.expires_in - 60) * 1000; resolve(driveToken);
+    }
+    tokenClient.callback = tokenCb; tokenClient.error_callback = tokenErr;
     tokenClient.requestAccessToken({ prompt: "", hint: me && me.email ? me.email : undefined });
   });
 }
 function driveFetch(url, token) {
   return fetch(url, { headers: { Authorization: "Bearer " + token } }).then(function (r) {
-    if (r.status === 401 || r.status === 403) throw new Error("Google Drive said no (" + r.status + "). Is trips-data.json shared with " + (me && me.email) + "?");
-    if (!r.ok) throw new Error("Google Drive error " + r.status);
-    return r;
+    if (r.ok) return r;
+    if (r.status === 401) { driveToken = null; }
+    return r.text().then(function (t) {
+      var msg = ""; try { var j = JSON.parse(t); msg = j.error && (j.error.message || j.error.status) || ""; } catch (e) { msg = t.slice(0, 200); }
+      throw new Error("Google Drive error " + r.status + (msg ? ": " + msg : "") + (r.status === 403 || r.status === 404 ? " (is trips-data.json shared with " + (me && me.email) + "?)" : ""));
+    });
   });
 }
 function loadTravelTrackerTrips() {
