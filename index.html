@@ -214,6 +214,7 @@ table.log th.prod.today { background: var(--surface); }
 .tripcard { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
 .tripcard strong { display: block; }
 .pl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pl li.grp { display: block; background: none; border: 0; padding: 8px 4px 0; }
 .pl li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px 6px 4px 4px; }
 .pl .item { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); gap: 10px; align-items: center; text-align: left; background: none; border: 0; padding: 6px 8px; border-radius: 10px; }
 .pl .item .box { width: 1.5rem; height: 1.5rem; border: 2px solid var(--line); border-radius: 8px; display: grid; place-items: center; }
@@ -677,13 +678,16 @@ function tripSessions(leave, leaveAt, ret, retAt) {
 }
 function buildItems(person, leave, leaveAt, ret, retAt) {
   var p = PEOPLE[person], s = tripSessions(leave, leaveAt, ret, retAt), items = [];
-  productsOf(p).forEach(function (pr) {
-    var uses = (pr.sessions.indexOf("am") >= 0 ? s.am : 0) + (pr.sessions.indexOf("pm") >= 0 ? s.pm : 0);
-    if (uses > 0) items.push({ id: pr.id, name: pr.name, note: (pr.brand ? pr.brand + " · " : "") + uses + (uses === 1 ? " use" : " uses"), packed: false, custom: false });
+  // One line per routine step: a product used morning and evening appears twice, once under each.
+  if (s.am > 0) p.am.forEach(function (pr, i) {
+    items.push({ id: "am-" + pr.id, group: "Morning", name: (i + 1) + ". " + pr.name, note: (pr.brand ? pr.brand + " · " : "") + s.am + (s.am === 1 ? " use" : " uses"), packed: false, custom: false });
+  });
+  if (s.pm > 0) p.pm.forEach(function (pr, i) {
+    items.push({ id: "pm-" + pr.id, group: "Evening", name: (i + 1) + ". " + pr.name, note: (pr.brand ? pr.brand + " · " : "") + s.pm + (s.pm === 1 ? " use" : " uses"), packed: false, custom: false });
   });
   MASKS.forEach(function (m) {
     var n = s.masks[m.name];
-    if (n) items.push({ id: "mask-" + m.short, name: m.name, note: m.brand + " · " + n + (n === 1 ? " mask day" : " mask days") + (m.alt ? " · or " + m.alt.name : ""), packed: false, custom: false });
+    if (n) items.push({ id: "mask-" + m.short, group: "Masks", name: m.name, note: m.brand + " · " + n + (n === 1 ? " mask day" : " mask days") + (m.alt ? " · or " + m.alt.name : ""), packed: false, custom: false });
   });
   return items;
 }
@@ -736,8 +740,11 @@ function viewTripDetail(t) {
   var html = '<div class="stack"><div><span class="label">' + PEOPLE[t.person].name + (t.name ? ' \u00b7 ' + tripDates(t) : '') + '</span><h1>' + tripTitle(t) + '</h1><p class="sub">' + s.days + (s.days === 1 ? ' day' : ' days') + ' away: ' + s.am + ' mornings, ' + s.pm + ' evenings' + (Object.keys(s.masks).length ? ', ' + Object.keys(s.masks).reduce(function (a, k) { return a + s.masks[k]; }, 0) + ' mask days' : '') + '.</p></div>';
   html += notice();
   html += '<div class="progress"><div class="bar"><i style="width:' + (t.items.length ? Math.round(packed / t.items.length * 100) : 0) + '%"></i></div><span class="mono">' + packed + '/' + t.items.length + ' packed</span></div>';
+  var lastGroup = null;
   html += '<ul class="pl">' + t.items.map(function (i, n) {
-    return '<li><button class="item" data-pack="' + n + '" aria-pressed="' + !!i.packed + '"' + (canAct() ? '' : ' disabled') + '><span class="box">' + CHECK + '</span><span><span class="nm">' + i.name + '</span>' + (i.note ? '<span class="qt">' + i.note + '</span>' : '') + '</span></button><button class="x" data-unpack="' + n + '" aria-label="Remove ' + i.name + '"' + (canAct() ? '' : ' disabled') + '><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></li>';
+    var g = i.custom ? "Added" : (i.group || ""), head = "";
+    if (g !== lastGroup) { lastGroup = g; if (g) head = '<li class="grp"><span class="label">' + g + '</span></li>'; }
+    return head + '<li><button class="item" data-pack="' + n + '" aria-pressed="' + !!i.packed + '"' + (canAct() ? '' : ' disabled') + '><span class="box">' + CHECK + '</span><span><span class="nm">' + i.name + '</span>' + (i.note ? '<span class="qt">' + i.note + '</span>' : '') + '</span></button><button class="x" data-unpack="' + n + '" aria-label="Remove ' + i.name + '"' + (canAct() ? '' : ' disabled') + '><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></li>';
   }).join("") + '</ul>';
   html += '<form class="addrow" id="addform"><input type="text" name="item" placeholder="Add an item" aria-label="Add an item" maxlength="80"' + (canAct() ? '' : ' disabled') + '><button type="submit" class="mini"' + (canAct() ? '' : ' disabled') + '>Add</button></form>';
   html += '<div class="btnrow"><button class="pdfbtn" data-trip-pdf="' + t.id + '">Download PDF</button><button class="pdfbtn alt" data-trip-edit="' + t.id + '"' + (canAct() ? '' : ' disabled') + '>Edit dates</button><button class="pdfbtn alt" data-trip-back="1">All trips</button><span class="note" id="pdfmsg" role="status">' + tripUi.msg + '</span></div>';
@@ -767,7 +774,13 @@ function tripPdf(t) {
   doc.text(fmt(toUtc(t.leave), { weekday: "short", month: "long", day: "numeric" }) + " " + t.leaveAt.toUpperCase() + "  to  " + fmt(toUtc(t.ret), { weekday: "short", month: "long", day: "numeric" }) + " " + t.retAt.toUpperCase(), 56, y); y += 16;
   doc.text(s.days + (s.days === 1 ? " day" : " days") + " away: " + s.am + " mornings, " + s.pm + " evenings", 56, y); y += 28;
   doc.setTextColor(0);
+  var lastG = null;
   t.items.forEach(function (i) {
+    var g = i.custom ? "Added" : (i.group || "");
+    if (g !== lastG) {
+      lastG = g;
+      if (g) { if (y > 710) { doc.addPage(); y = 64; } y += 4; doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(120); doc.text(g.toUpperCase(), 56, y); doc.setTextColor(0); y += 18; }
+    }
     if (y > 730) { doc.addPage(); y = 64; }
     doc.setDrawColor(120); doc.rect(56, y - 11, 13, 13);
     if (i.packed) { doc.setLineWidth(1.5); doc.line(58.5, y - 5, 62, y - 1); doc.line(62, y - 1, 67, y - 9); doc.setLineWidth(1); }
