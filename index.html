@@ -649,7 +649,43 @@ function viewLog() {
   html += notice();
   html += '<div class="legend"><span><i class="sw yes">' + TICK + '</i>Used</span><span><i class="sw no">' + CROSS + '</i>Not used</span><span><i class="sw na"></i>Not in that routine</span><span><i class="sw mk"></i>Mask day</span></div>';
   html += logTable("jonathan", keys, today) + logTable("wife", keys, today);
+  html += catchUpForm(today);
   return html + '</div>';
+}
+// "Catch up": mark every step done for a range of days, for days that were done but not tapped.
+var catchMsg = "";
+function catchUpForm(today) {
+  var from = SEED, to = today, toAt = nowParts().h < 14 ? "am" : "pm";
+  function seg(name, val) {
+    return '<span class="seg"><input type="radio" name="' + name + '" id="' + name + '-am" value="am"' + (val === "am" ? " checked" : "") + '><label for="' + name + '-am">AM</label><input type="radio" name="' + name + '" id="' + name + '-pm" value="pm"' + (val === "pm" ? " checked" : "") + '><label for="' + name + '-pm">PM</label></span>';
+  }
+  return '<details class="members"><summary>Fill in past days</summary><form class="form" id="catchform">' +
+    '<p class="note">Marks every step as done for the days you choose, for one or both of you. Use it when the routine was done but not tapped. It only adds checks; it never removes any.</p>' +
+    '<div class="field"><label>Who</label><span class="seg"><input type="radio" name="who" id="cw-both" value="both" checked><label for="cw-both">Both</label><input type="radio" name="who" id="cw-j" value="jonathan"><label for="cw-j">Jonathan</label><input type="radio" name="who" id="cw-w" value="wife"><label for="cw-w">Monique</label></span></div>' +
+    '<div class="two"><div class="field"><label for="cfrom">From</label><div class="pair"><input type="date" id="cfrom" name="from" value="' + from + '" min="' + SEED + '" max="' + today + '" required>' + seg("fromAt", "am") + '</div></div>' +
+    '<div class="field"><label for="cto">Through</label><div class="pair"><input type="date" id="cto" name="to" value="' + to + '" min="' + SEED + '" max="' + today + '" required>' + seg("toAt", toAt) + '</div></div></div>' +
+    (catchMsg ? '<p class="note">' + catchMsg + '</p>' : '') +
+    '<div class="btnrow"><button type="submit" class="pdfbtn"' + (canAct() ? '' : ' disabled') + '>Mark all done</button></div></form></details>';
+}
+function catchUp(form) {
+  var who = form.who.value, from = form.from.value, to = form.to.value, fromAt = form.fromAt.value, toAt = form.toAt.value, today = todayKey();
+  if (!from || !to || from > to || to > today) { catchMsg = "Pick a range of past dates, earliest first."; return; }
+  var people = who === "both" ? ["jonathan", "wife"] : [who], n = 0;
+  for (var u = toUtc(from); u <= toUtc(to); u += DAY) {
+    var k = toKey(u);
+    ["am", "pm"].forEach(function (sess) {
+      if (k === from && fromAt === "pm" && sess === "am") return;
+      if (k === to && toAt === "am" && sess === "pm") return;
+      people.forEach(function (person) {
+        var id = person + "_" + k + "_" + sess, doc = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { person: person, date: k, session: sess, steps: [] };
+        var before = doc.steps.length;
+        PEOPLE[person][sess].forEach(function (st) { if (doc.steps.indexOf(st.id) < 0) doc.steps.push(st.id); });
+        if (doc.steps.length !== before) { checks[id] = doc; save("checks/" + id, doc); n++; }
+      });
+    });
+  }
+  reindex();
+  catchMsg = n ? "Marked " + n + (n === 1 ? " routine" : " routines") + " as done." : "Nothing to add; those days were already complete.";
 }
 
 function render() {
@@ -797,6 +833,7 @@ function tripPdf(t) {
 document.addEventListener("submit", function (e) {
   var f = e.target;
   if (f.id === "tripform") { e.preventDefault(); if (canAct()) submitTrip(f); render(); }
+  else if (f.id === "catchform") { e.preventDefault(); if (canAct()) catchUp(f); render(); var d = document.querySelector("#catchform"); if (d && d.closest("details")) d.closest("details").open = true; }
   else if (f.id === "addform") {
     e.preventDefault();
     var v = f.item.value.trim(); if (!v) return;
