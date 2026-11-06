@@ -744,16 +744,14 @@ function tripSessions(leave, leaveAt, ret, retAt) {
 }
 function buildItems(person, leave, leaveAt, ret, retAt) {
   var p = PEOPLE[person], s = tripSessions(leave, leaveAt, ret, retAt), items = [];
-  // One line per routine step: a product used morning and evening appears twice, once under each.
-  if (s.am > 0) p.am.forEach(function (pr, i) {
-    items.push({ id: "am-" + pr.id, group: "Morning", name: (i + 1) + ". " + pr.name, note: (pr.brand ? pr.brand + " · " : "") + s.am + (s.am === 1 ? " use" : " uses"), packed: false, custom: false });
-  });
-  if (s.pm > 0) p.pm.forEach(function (pr, i) {
-    items.push({ id: "pm-" + pr.id, group: "Evening", name: (i + 1) + ". " + pr.name, note: (pr.brand ? pr.brand + " · " : "") + s.pm + (s.pm === 1 ? " use" : " uses"), packed: false, custom: false });
+  // One line per product, in routine order (morning steps, then evening-only ones), with total uses.
+  productsOf(p).forEach(function (pr) {
+    var am = pr.sessions.indexOf("am") >= 0 ? s.am : 0, pm = pr.sessions.indexOf("pm") >= 0 ? s.pm : 0, uses = am + pm;
+    if (uses > 0) items.push({ id: pr.id, name: pr.name, note: (pr.brand ? pr.brand + " · " : "") + uses + (uses === 1 ? " use" : " uses") + (am && pm ? " (" + am + " morning, " + pm + " evening)" : am ? " (morning)" : " (evening)"), packed: false, custom: false });
   });
   MASKS.forEach(function (m) {
     var n = s.masks[m.name];
-    if (n) items.push({ id: "mask-" + m.short, group: "Masks", name: m.name, note: m.brand + " · " + n + (n === 1 ? " mask day" : " mask days") + (m.alt ? " · or " + m.alt.name : ""), packed: false, custom: false });
+    if (n) items.push({ id: "mask-" + m.short, name: m.name, note: m.brand + " · " + n + (n === 1 ? " mask day" : " mask days") + (m.alt ? " · or " + m.alt.name : ""), packed: false, custom: false });
   });
   return items;
 }
