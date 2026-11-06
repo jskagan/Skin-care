@@ -228,6 +228,13 @@ table.log th.prod.today { background: var(--surface); }
 .x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
 .addrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .danger { border-color: var(--bad-fg); color: var(--bad-fg); }
+.complete { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; border: 0; border-radius: 14px; padding: 14px 16px; font-weight: 700; font-size: 1.0625rem; background: var(--ok-fg); color: #FFFFFF; }
+.complete svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.complete:disabled { opacity: 0.5; cursor: default; }
+.donewrap { display: flex; justify-content: center; }
+.doneicon { display: block; width: min(100%, calc(100vh - 17rem)); max-width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 24px; }
+.btnrow.center { justify-content: center; }
+
 .gate { display: flex; justify-content: center; padding-top: 10vh; }
 .gatecard { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; max-width: 420px; width: 100%; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .gateicon { width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--line); }
@@ -519,14 +526,36 @@ function viewToday() {
   var html = '<div class="stack">';
   html += '<div><span class="label">' + fmt(t.utc, { weekday: "long" }) + '</span><h1>' + fmt(t.utc, { month: "long", day: "numeric" }) + '</h1></div>';
   html += notice();
-  html += maskBanner(t);
-  html += '<div class="session" role="group" aria-label="Time of day">' +
+  var sessionRow = '<div class="session" role="group" aria-label="Time of day">' +
     '<button id="s-am" data-s="am" aria-pressed="' + (state.session === "am") + '">' + SUN + 'Morning</button>' +
     '<button id="s-pm" data-s="pm" aria-pressed="' + (state.session === "pm") + '">' + MOON + 'Evening</button></div>';
+  if (isComplete()) {
+    html += '<div class="donewrap"><img class="doneicon" src="img/icon-512.png" alt="' + (state.session === "am" ? "Morning" : "Evening") + ' routine complete"></div>';
+    html += sessionRow;
+    html += '<div class="btnrow center"><span class="note">' + (state.session === "am" ? "Morning" : "Evening") + ' routine complete.</span><button class="mini" data-undone="1"' + (canAct() ? '' : ' disabled') + '>Show steps</button></div>';
+    return html + '</div>';
+  }
+  html += maskBanner(t);
+  html += sessionRow;
   html += '<div class="progress"><div class="bar"><i style="width:' + Math.round(done / list.length * 100) + '%"></i></div><span class="mono">' + done + '/' + list.length + '</span></div>';
   html += '<ol class="steps">' + stepRows(list, true) + '</ol>';
+  html += '<button class="complete" data-complete="1"' + (canAct() ? '' : ' disabled') + '>' + CHECK + 'Complete</button>';
   if (p.labeled) html += '<p class="note">Step numbers match the handwritten labels on the bottles.</p>';
   return html + '</div>';
+}
+function isComplete() {
+  var d = checks[state.person + "_" + todayKey() + "_" + state.session];
+  return !!(d && d.complete);
+}
+function setComplete(on) {
+  if (!canAct()) return;
+  var date = todayKey(), id = state.person + "_" + date + "_" + state.session;
+  var doc = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { person: state.person, date: date, session: state.session, steps: [] };
+  if (on) PEOPLE[state.person][state.session].forEach(function (st) {
+    if (doc.steps.indexOf(st.id) < 0 && getBottle(state.person, st.id).status !== "empty") doc.steps.push(st.id);
+  });
+  doc.complete = !!on;
+  checks[id] = doc; reindex(); save("checks/" + id, doc);
 }
 
 function viewRoutine() {
@@ -877,6 +906,8 @@ document.addEventListener("click", function (e) {
   else if (b.dataset.tripDelNo) { tripUi.confirmDel = false; }
   else if (b.dataset.tripDelYes) { var did = b.dataset.tripDelYes; delete trips[did]; if (DB) DB.doc("trips/" + did).delete().catch(function () {}); tripUi = { mode: "list", id: null, err: "", msg: "" }; }
   else if (b.dataset.step !== undefined) toggleStep(b.dataset.step);
+  else if (b.dataset.complete) setComplete(true);
+  else if (b.dataset.undone) setComplete(false);
   else if (b.dataset.empty !== undefined) { state.confirm = b.dataset.empty; keepConfirm = true; }
   else if (b.dataset.emptyYes !== undefined) markEmpty(b.dataset.emptyYes);
   else if (b.dataset.new !== undefined) startNew(b.dataset.new);
