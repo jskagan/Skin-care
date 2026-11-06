@@ -127,7 +127,7 @@ ol.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-directio
 .step[aria-pressed="true"] .name { text-decoration: line-through; color: var(--muted); }
 .step[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); }
 .step[aria-pressed="true"] .box svg { opacity: 1; }
-.step[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.step.out .name { color: var(--muted); }
 div.step { cursor: default; }
 .note { font-size: 0.875rem; color: var(--muted); margin: 0; }
 
@@ -423,7 +423,6 @@ function isOn(pid) {
 }
 function toggleStep(pid) {
   if (!canAct()) return;
-  if (getBottle(state.person, pid).status === "empty") return;
   var date = todayKey(), id = state.person + "_" + date + "_" + state.session;
   var doc = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { person: state.person, date: date, session: state.session, steps: [] };
   var i = doc.steps.indexOf(pid);
@@ -435,6 +434,8 @@ function toggleStep(pid) {
 function markEmpty(pid) {
   if (!canAct()) return;
   var b = getBottle(state.person, pid), today = todayKey();
+  // The last squeeze counts: marking a bottle empty also checks it off for this session.
+  if (!isOn(pid) && PEOPLE[state.person][state.session].some(function (st) { return st.id === pid; })) toggleStep(pid);
   var nb = { person: state.person, pid: pid, startedOn: b.startedOn, status: "empty", emptiedOn: today,
              cycles: b.cycles.concat([{ startedOn: b.startedOn, emptiedOn: today, uses: usesOf(state.person, pid) }]) };
   bottles[state.person + "_" + pid] = nb;
@@ -506,7 +507,7 @@ function stepRows(list, interactive) {
     if (!interactive) return '<li class="row">' + thumb(s.img, capOf(s)) + '<div class="step">' + inner + '</div></li>';
     var empty = getBottle(state.person, s.id).status === "empty";
     return '<li class="pc"><div class="row">' + thumb(s.img, capOf(s)) + '<div class="card">' +
-      '<button class="step" data-step="' + s.id + '" aria-pressed="' + isOn(s.id) + '"' + (empty ? ' aria-disabled="true"' : '') + '>' + inner + '<span class="box">' + CHECK + '</span></button>' +
+      '<button class="step' + (empty ? ' out' : '') + '" data-step="' + s.id + '" aria-pressed="' + isOn(s.id) + '">' + inner + '<span class="box">' + CHECK + '</span></button>' +
       metaLine(s) + '</div></div></li>';
   }).join("");
 }
@@ -552,7 +553,7 @@ function setComplete(on) {
   var date = todayKey(), id = state.person + "_" + date + "_" + state.session;
   var doc = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { person: state.person, date: date, session: state.session, steps: [] };
   if (on) PEOPLE[state.person][state.session].forEach(function (st) {
-    if (doc.steps.indexOf(st.id) < 0 && getBottle(state.person, st.id).status !== "empty") doc.steps.push(st.id);
+    if (doc.steps.indexOf(st.id) < 0) doc.steps.push(st.id);
   });
   doc.complete = !!on;
   checks[id] = doc; reindex(); save("checks/" + id, doc);
