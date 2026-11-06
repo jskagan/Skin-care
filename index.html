@@ -1056,7 +1056,7 @@ function getPdf(who) {
 }
 
 // ---- Trips from Travel Tracker (trips-data.json on Google Drive) ----
-var driveToken = null, driveTokenExp = 0, tokenClient = null, ttTrips = null, ttMsg = "", ttBusy = false;
+var driveToken = null, driveTokenExp = 0, tokenClient = null, ttTrips = null, ttMsg = "", ttBusy = false, ttCount = 0;
 function getDriveToken() {
   return new Promise(function (resolve, reject) {
     if (driveToken && Date.now() < driveTokenExp) return resolve(driveToken);
@@ -1107,14 +1107,21 @@ function loadTravelTrackerTrips() {
       .then(function (r) { return r.json(); });
   }).then(function (data) {
     var today = todayKey();
-    ttTrips = (data.trips || []).filter(function (t) { return t.start && t.end && t.end >= today; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; })
+    // Like Travel Tracker, take the date range from the events when the trip has no start/end of its own.
+    function dayOf(iso) { var m = /^(\d{4}-\d{2}-\d{2})/.exec(iso || ""); return m ? m[1] : null; }
+    ttTrips = (data.trips || []).map(function (t) {
+      var days = (t.events || []).map(function (e) { return dayOf(e.start) || dayOf(e.end); }).filter(Boolean).sort();
+      var ends = (t.events || []).map(function (e) { return dayOf(e.end) || dayOf(e.start); }).filter(Boolean).sort();
+      return Object.assign({}, t, { start: dayOf(t.start) || days[0] || null, end: dayOf(t.end) || ends[ends.length - 1] || days[days.length - 1] || dayOf(t.start) || null });
+    }).filter(function (t) { return t.start && t.end && t.end >= today; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; })
       .map(function (t) {
         var flights = (t.events || []).filter(function (e) { return e.type === "flight" && e.start; }).sort(function (a, b) { return a.start < b.start ? -1 : 1; });
         var dep = flights.length ? flights[0].start : null, arr = flights.length ? (flights[flights.length - 1].end || flights[flights.length - 1].start) : null;
         function half(iso) { var m = /T(\d\d):/.exec(iso || ""); return m ? (+m[1] < 12 ? "am" : "pm") : null; }
         return { key: t.key, name: t.name || "Trip", start: t.start, end: t.end, leaveAt: half(dep) || "am", retAt: half(arr) || "pm", dep: dep, arr: arr };
       });
-    if (!ttTrips.length) ttMsg = "No upcoming trips in Travel Tracker.";
+    ttCount = (data.trips || []).length;
+    if (!ttTrips.length) ttMsg = "No upcoming trips found in Travel Tracker (" + ttCount + " trips in the file, none with dates on or after today).";
     ttBusy = false; render();
   }).catch(function (e) { ttBusy = false; ttTrips = null; ttMsg = e && e.message ? e.message : String(e); render(); });
 }
@@ -1124,7 +1131,7 @@ function ttPicker() {
   else if (ttTrips && ttTrips.length) {
     h += '<div class="trips">' + ttTrips.map(function (t, i) {
       return '<button type="button" class="tripcard" data-tt="' + i + '"><span><strong>' + t.name + '</strong><span class="note">' + fmtKey(t.start) + ' ' + t.leaveAt.toUpperCase() + ' to ' + fmtKey(t.end) + ' ' + t.retAt.toUpperCase() + (t.dep ? '' : ' · no flight times, AM/PM guessed') + '</span></span><span class="note">Use</span></button>';
-    }).join("") + '</div>';
+    }).join("") + '</div><div class="btnrow"><button type="button" class="mini" data-tt-load="1">Reload trips</button><span class="note">' + ttCount + ' trips in the file, ' + ttTrips.length + ' upcoming</span></div>';
   } else h += '<div class="btnrow"><button type="button" class="pdfbtn alt" data-tt-load="1">Load trips from Travel Tracker</button></div>';
   if (ttMsg) h += '<p class="err">' + ttMsg + '</p>';
   return h + '</div>';
