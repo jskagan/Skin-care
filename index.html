@@ -181,9 +181,13 @@ ol.plain .step { grid-template-columns: 1.5rem minmax(0, 1fr); }
 table.log { border-collapse: separate; border-spacing: 0; font-size: 0.8125rem; min-width: 100%; }
 table.log th, table.log td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; text-align: center; vertical-align: middle; }
 table.log th { font-weight: 600; color: var(--muted); background: var(--surface); }
-table.log th.date { padding: 8px 6px 2px; line-height: 1.2; white-space: nowrap; color: var(--fg); }
+table.log th.date { padding: 0; line-height: 1.2; white-space: nowrap; color: var(--fg); }
+table.log .dl { border: 0; background: none; color: inherit; font: inherit; font-weight: inherit; padding: 8px 6px 2px; width: 100%; border-radius: 8px; }
+table.log th.s .dl { padding: 2px 0 6px; font-size: inherit; letter-spacing: inherit; }
+table.log .dl:hover { background: var(--today-bg); }
+table.log .dl:focus-visible { outline-offset: -3px; }
 table.log th.date.mask { color: var(--mask); }
-table.log th.s { font-size: 0.6875rem; letter-spacing: 0.06em; padding: 2px 0 6px; width: 2.4rem; min-width: 2.4rem; }
+table.log th.s { font-size: 0.6875rem; letter-spacing: 0.06em; padding: 0; width: 2.4rem; min-width: 2.4rem; }
 table.log th.s.am { color: var(--am); } table.log th.s.pm { color: var(--pm); }
 table.log th.prod { position: sticky; left: 0; z-index: 1; text-align: left; padding: 8px 12px; white-space: nowrap; color: var(--fg); background: var(--surface); box-shadow: 1px 0 0 var(--line); }
 table.log thead th.prod { font-family: var(--font-display); font-size: 1.05rem; vertical-align: bottom; }
@@ -356,6 +360,8 @@ function nowParts() {
   return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate(), h: d.getHours(), utc: Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) };
 }
 function todayKey() { var t = nowParts(); return t.y + "-" + pad(t.m + 1) + "-" + pad(t.d); }
+// The day shown on the Today tab: today unless a date was picked from the Daily log.
+function viewKey() { return state.date || todayKey(); }
 function toUtc(key) { var p = key.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
 function toKey(utc) { var d = new Date(utc); return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()); }
 function daysBetween(a, b) { return Math.round((toUtc(b) - toUtc(a)) / DAY); }
@@ -379,7 +385,7 @@ function rel(utc, today) {
 }
 
 // ---- State ----
-var state = { person: "jonathan", view: "today", session: (nowParts().h >= 3 && nowParts().h < 14) ? "am" : "pm", confirm: null };
+var state = { date: null, person: "jonathan", view: "today", session: (nowParts().h >= 3 && nowParts().h < 14) ? "am" : "pm", confirm: null };
 var DB = null;
 var dbState = "loading";  // loading | ready | offline | slow
 var canWrite = true;
@@ -418,12 +424,12 @@ function save(path, data) {
   queues[path] = prev.then(function () { return DB.doc(path).set(data); }).catch(function () { dbState = "slow"; render(); });
 }
 function isOn(pid) {
-  var d = checks[state.person + "_" + todayKey() + "_" + state.session];
+  var d = checks[state.person + "_" + viewKey() + "_" + state.session];
   return !!(d && d.steps && d.steps.indexOf(pid) >= 0);
 }
 function toggleStep(pid) {
   if (!canAct()) return;
-  var date = todayKey(), id = state.person + "_" + date + "_" + state.session;
+  var date = viewKey(), id = state.person + "_" + date + "_" + state.session;
   var doc = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { person: state.person, date: date, session: state.session, steps: [] };
   var i = doc.steps.indexOf(pid);
   if (i >= 0) doc.steps.splice(i, 1); else doc.steps.push(pid);
@@ -523,9 +529,12 @@ function maskBanner(t) {
 
 function viewToday() {
   var t = nowParts(), p = PEOPLE[state.person], list = p[state.session];
+  var past = !!state.date && state.date !== todayKey();
+  if (past) t = { utc: toUtc(state.date) };
   var done = list.filter(function (s) { return isOn(s.id); }).length;
   var html = '<div class="stack">';
-  html += '<div><span class="label">' + fmt(t.utc, { weekday: "long" }) + '</span><h1>' + fmt(t.utc, { month: "long", day: "numeric" }) + '</h1></div>';
+  html += '<div><span class="label">' + fmt(t.utc, { weekday: "long" }) + (past ? ' · earlier day' : '') + '</span><h1>' + fmt(t.utc, { month: "long", day: "numeric" }) + '</h1>' +
+    (past ? '<div class="btnrow"><button class="mini" data-today="1">Back to today</button><span class="note">Changes here are saved to ' + fmtKey(state.date) + '.</span></div>' : '') + '</div>';
   html += notice();
   var sessionRow = '<div class="session" role="group" aria-label="Time of day">' +
     '<button id="s-am" data-s="am" aria-pressed="' + (state.session === "am") + '">' + SUN + 'Morning</button>' +
@@ -545,12 +554,12 @@ function viewToday() {
   return html + '</div>';
 }
 function isComplete() {
-  var d = checks[state.person + "_" + todayKey() + "_" + state.session];
+  var d = checks[state.person + "_" + viewKey() + "_" + state.session];
   return !!(d && d.complete);
 }
 function setComplete(on) {
   if (!canAct()) return;
-  var date = todayKey(), id = state.person + "_" + date + "_" + state.session;
+  var date = viewKey(), id = state.person + "_" + date + "_" + state.session;
   var doc = checks[id] ? JSON.parse(JSON.stringify(checks[id])) : { person: state.person, date: date, session: state.session, steps: [] };
   if (on) PEOPLE[state.person][state.session].forEach(function (st) {
     if (doc.steps.indexOf(st.id) < 0) doc.steps.push(st.id);
@@ -653,9 +662,9 @@ function logTable(who, keys, today) {
   var p = PEOPLE[who], prods = productsOf(p);
   var head = '<tr><th class="prod" rowspan="2">' + p.name + '</th>' + keys.map(function (k) {
     var u = toUtc(k);
-    return '<th colspan="2" class="date' + (k === today ? ' today' : '') + (maskFor(u) ? ' mask' : '') + '">' + fmt(u, { weekday: "short" }) + '<br>' + fmt(u, { month: "numeric", day: "numeric" }) + '</th>';
+    return '<th colspan="2" class="date' + (k === today ? ' today' : '') + (maskFor(u) ? ' mask' : '') + '"><button class="dl" data-go-date="' + k + '" aria-label="Open ' + fmt(u, { weekday: "long", month: "long", day: "numeric" }) + '">' + fmt(u, { weekday: "short" }) + '<br>' + fmt(u, { month: "numeric", day: "numeric" }) + '</button></th>';
   }).join("") + '</tr><tr>' + keys.map(function (k) {
-    return '<th class="s am' + (k === today ? ' today' : '') + '">AM</th><th class="s pm' + (k === today ? ' today' : '') + '">PM</th>';
+    return '<th class="s am' + (k === today ? ' today' : '') + '"><button class="dl" data-go-date="' + k + '" data-go-sess="am">AM</button></th><th class="s pm' + (k === today ? ' today' : '') + '"><button class="dl" data-go-date="' + k + '" data-go-sess="pm">PM</button></th>';
   }).join("") + '</tr>';
   var body = prods.map(function (s) {
     var cells = keys.map(function (k) {
@@ -667,7 +676,7 @@ function logTable(who, keys, today) {
     }).join("");
     return '<tr><th class="prod" scope="row">' + s.name.replace(/\s*\(.*\)$/, "") + '</th>' + cells + '</tr>';
   }).join("");
-  return '<div class="tscroll"><table class="log"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+  return '<div class="tscroll" data-person-table="' + who + '"><table class="log"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
 }
 function viewLog() {
   var t = nowParts(), today = todayKey();
@@ -675,7 +684,7 @@ function viewLog() {
   Object.keys(checks).forEach(function (id) { var d = checks[id]; if (d && d.date && d.steps && d.steps.length) dates[d.date] = 1; });
   for (var i = 0; i < 7; i++) dates[toKey(t.utc - i * DAY)] = 1;
   var keys = Object.keys(dates).filter(function (k) { return k >= SEED && k <= today; }).sort();
-  var html = '<div class="stack"><div><h1>Daily log</h1><p class="sub">Each product by day and time. Green check: used. Red X: not checked off. Gray: not part of that routine. The last 7 days always show; earlier days show when something was recorded.</p></div>';
+  var html = '<div class="stack"><div><h1>Daily log</h1><p class="sub">Each product by day and time. Green check: used. Red X: not checked off. Gray: not part of that routine. Tap a date, AM or PM to open that day and fix it. The last 7 days always show; earlier days show when something was recorded.</p></div>';
   html += notice();
   html += '<div class="legend"><span><i class="sw yes">' + TICK + '</i>Used</span><span><i class="sw no">' + CROSS + '</i>Not used</span><span><i class="sw na"></i>Not in that routine</span><span><i class="sw mk"></i>Mask day</span></div>';
   html += logTable("jonathan", keys, today) + logTable("wife", keys, today);
@@ -892,7 +901,13 @@ document.addEventListener("click", function (e) {
   if (!b || b.disabled) return;
   var keepConfirm = false;
   if (b.dataset.person) { state.person = b.dataset.person; picked = true; }
-  else if (b.dataset.view) state.view = b.dataset.view;
+  else if (b.dataset.view) { state.view = b.dataset.view; if (state.view === "today") state.date = null; }
+  else if (b.dataset.today) state.date = null;
+  else if (b.dataset.goDate) {
+    var tbl = b.closest("[data-person-table]"); if (tbl) state.person = tbl.dataset.personTable;
+    state.date = b.dataset.goDate === todayKey() ? null : b.dataset.goDate; state.view = "today"; state.session = b.dataset.goSess || state.session;
+    window.scrollTo(0, 0); var tabs = document.querySelector(".tabs"); if (tabs) tabs.scrollLeft = 0;
+  }
   else if (b.dataset.s) state.session = b.dataset.s;
   else if (b.dataset.pdf) { getPdf(b.dataset.pdf); return; }
   else if (b.dataset.tripNew) { tripUi = { mode: "new", id: null, err: "", msg: "" }; }
