@@ -232,6 +232,15 @@ table.log th.prod.today { background: var(--surface); }
 .x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
 .addrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .danger { border-color: var(--bad-fg); color: var(--bad-fg); }
+.banner.done { border-color: var(--ok-fg); background: var(--ok-bg); }
+.banner .maskcheck { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; border: 1px solid var(--mask); background: var(--surface); color: var(--fg); border-radius: 12px; padding: 8px 12px; font-weight: 600; }
+.banner .maskcheck .box { width: 1.5rem; height: 1.5rem; border: 2px solid var(--line); border-radius: 8px; display: grid; place-items: center; }
+.banner .maskcheck .box svg { width: 14px; height: 14px; stroke: var(--accent-fg); stroke-width: 3; fill: none; opacity: 0; }
+.banner .maskcheck[aria-pressed="true"] { border-color: var(--ok-fg); color: var(--muted); }
+.banner .maskcheck[aria-pressed="true"] .box { background: var(--ok-fg); border-color: var(--ok-fg); }
+.banner .maskcheck[aria-pressed="true"] .box svg { opacity: 1; }
+.banner .maskcheck:disabled { opacity: 0.5; }
+.banner.remind { background: var(--mask-bg); border-color: var(--mask); }
 .datepick { position: relative; display: block; }
 .datebtn { border: 0; background: none; padding: 0; font: inherit; letter-spacing: inherit; color: inherit; display: inline-flex; align-items: baseline; gap: 10px; text-align: left; border-radius: 8px; }
 .datebtn svg { width: 0.7em; height: 0.7em; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; align-self: center; }
@@ -522,10 +531,26 @@ function stepRows(list, interactive) {
   }).join("");
 }
 
+// Mask check-off for a day lives in its own doc: checks/<person>_<date>_mask with steps ["mask"].
+function maskDocId(person, date) { return person + "_" + date + "_mask"; }
+function isMaskOn(person, date) { var d = checks[maskDocId(person, date)]; return !!(d && d.steps && d.steps.indexOf("mask") >= 0); }
+function toggleMask() {
+  if (!canAct()) return;
+  var date = viewKey(), id = maskDocId(state.person, date);
+  var doc = { person: state.person, date: date, session: "mask", steps: isMaskOn(state.person, date) ? [] : ["mask"] };
+  checks[id] = doc; save("checks/" + id, doc);
+}
+function maskReminder(t) {
+  var m = maskFor(t.utc + DAY);
+  if (!m) return "";
+  return '<div class="banner remind"><div class="txt"><span class="label">Reminder</span><strong>Mask day tomorrow</strong><span class="note">' + m.name + ', ' + m.brand + '.' + (m.alt ? ' Out of it? Use ' + m.alt.name + '.' : '') + '</span></div><div class="thumbs">' + thumb(m.img, capOf(m)) + '</div></div>';
+}
 function maskBanner(t) {
   var m = maskFor(t.utc);
   if (m) {
-    return '<div class="banner"><div class="txt"><span class="label">Mask day</span><strong>' + m.name + '</strong><span class="note">' + m.brand + '. Use it in addition to the usual steps.</span>' + (m.alt ? '<span class="note">Out of it? Use ' + m.alt.name + '.</span>' : '') + '</div><div class="thumbs">' + thumb(m.img, capOf(m)) + (m.alt ? thumb(m.alt.img, capOf(m.alt)) : '') + '</div></div>';
+    var on = isMaskOn(state.person, viewKey());
+    return '<div class="banner' + (on ? ' done' : '') + '"><div class="txt"><span class="label">Mask day</span><strong>' + m.name + '</strong><span class="note">' + m.brand + '. Use it in addition to the usual steps.</span>' + (m.alt ? '<span class="note">Out of it? Use ' + m.alt.name + '.</span>' : '') + '</div><div class="thumbs">' + thumb(m.img, capOf(m)) + (m.alt ? thumb(m.alt.img, capOf(m.alt)) : '') + '</div>' +
+      '<button class="maskcheck" data-mask="1" aria-pressed="' + on + '"' + (canAct() ? '' : ' disabled') + '><span class="box">' + CHECK + '</span>' + (on ? 'Mask done' : 'Mark mask done') + '</button></div>';
   }
   var nx = nextMask(t.utc);
   return '<div class="banner quiet"><div class="txt"><span class="label">No mask today</span><span><strong>Next: ' + fmt(nx.utc, { weekday: "short", month: "short", day: "numeric" }) + '</strong> <span class="note">' + nx.mask.name + ', ' + rel(nx.utc, t.utc).toLowerCase() + '</span></span></div>' + thumb(nx.mask.img, capOf(nx.mask)) + '</div>';
@@ -548,6 +573,8 @@ function viewToday() {
     '<button id="s-pm" data-s="pm" aria-pressed="' + (state.session === "pm") + '">' + MOON + 'Evening</button></div>';
   if (isComplete()) {
     html += '<div class="donewrap"><img class="doneicon" src="img/icon-512.png" alt="' + (state.session === "am" ? "Morning" : "Evening") + ' routine complete"></div>';
+    if (maskFor(t.utc) && !isMaskOn(state.person, viewKey())) html += maskBanner(t);
+    if (state.session === "pm") html += maskReminder(t);
     html += sessionRow;
     html += '<div class="btnrow center"><span class="note">' + (state.session === "am" ? "Morning" : "Evening") + ' routine complete.</span><button class="mini" data-undone="1"' + (canAct() ? '' : ' disabled') + '>Show steps</button></div>';
     return html + '</div>';
@@ -557,6 +584,7 @@ function viewToday() {
   html += '<div class="progress"><div class="bar"><i style="width:' + Math.round(done / list.length * 100) + '%"></i></div><span class="mono">' + done + '/' + list.length + '</span></div>';
   html += '<ol class="steps">' + stepRows(list, true) + '</ol>';
   html += '<button class="complete" data-complete="1"' + (canAct() ? '' : ' disabled') + '>' + CHECK + 'Complete</button>';
+  if (state.session === "pm" && done === list.length) html += maskReminder(t);
   if (p.labeled) html += '<p class="note">Step numbers match the handwritten labels on the bottles.</p>';
   return html + '</div>';
 }
@@ -683,6 +711,12 @@ function logTable(who, keys, today) {
     }).join("");
     return '<tr><th class="prod" scope="row">' + s.name.replace(/\s*\(.*\)$/, "") + '</th>' + cells + '</tr>';
   }).join("");
+  body += '<tr><th class="prod" scope="row">Mask</th>' + keys.map(function (k) {
+    var m = maskFor(toUtc(k));
+    if (!m) return '<td colspan="2" class="na' + (k === today ? ' today' : '') + '" title="Not a mask day"></td>';
+    var on = isMaskOn(who, k);
+    return '<td colspan="2" class="' + (on ? 'yes' : 'no') + (k === today ? ' today' : '') + '" title="' + m.name + '"><span aria-label="' + (on ? 'mask done' : 'mask not done') + '">' + (on ? TICK : CROSS) + '</span></td>';
+  }).join("") + '</tr>';
   return '<div class="tscroll" data-person-table="' + who + '"><table class="log"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
 }
 function viewLog() {
@@ -730,8 +764,17 @@ function catchUp(form) {
       });
     });
   }
+  for (var u2 = toUtc(from); u2 <= toUtc(to); u2 += DAY) {
+    var k2 = toKey(u2);
+    if (!maskFor(u2)) continue;
+    people.forEach(function (person) {
+      if (isMaskOn(person, k2)) return;
+      var id2 = maskDocId(person, k2), d2 = { person: person, date: k2, session: "mask", steps: ["mask"] };
+      checks[id2] = d2; save("checks/" + id2, d2); n++;
+    });
+  }
   reindex();
-  catchMsg = n ? "Marked " + n + (n === 1 ? " routine" : " routines") + " as done." : "Nothing to add; those days were already complete.";
+  catchMsg = n ? "Marked " + n + (n === 1 ? " routine" : " routines") + " as done (masks included)." : "Nothing to add; those days were already complete.";
 }
 
 function render() {
@@ -931,6 +974,7 @@ document.addEventListener("click", function (e) {
   else if (b.dataset.tripDelYes) { var did = b.dataset.tripDelYes; delete trips[did]; if (DB) DB.doc("trips/" + did).delete().catch(function () {}); tripUi = { mode: "list", id: null, err: "", msg: "" }; }
   else if (b.dataset.step !== undefined) toggleStep(b.dataset.step);
   else if (b.dataset.complete) setComplete(true);
+  else if (b.dataset.mask) toggleMask();
   else if (b.dataset.undone) setComplete(false);
   else if (b.dataset.empty !== undefined) { state.confirm = b.dataset.empty; keepConfirm = true; }
   else if (b.dataset.emptyYes !== undefined) markEmpty(b.dataset.emptyYes);
